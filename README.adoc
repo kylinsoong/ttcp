@@ -1,0 +1,55 @@
+= 回射服务
+
+回射服务是简单的客户端服务器端通信的工具，通过 Socket 8877 端口提供标准因特网服务和回射服务：
+
+* 服务器端，监听在 8877 端口提供服务
+* 客户端，需要传入一个参数(服务器端的 IP 地址)，根据传入的参数建立服务器端连接后输入相应的命令，建立完成后接收服务器端返回字符串，并打印输出。
+
+== 编译运行
+
+[source, bash]
+.*获取代码*
+----
+$ git clone https://github.com/kylinsoong/networks.git
+$ cd networks/echo/
+----
+
+[source, bash]
+.*编译运行*
+----
+gcc server.c lib_utils.c lib_ios.c lib_socket.c str_echo.c -o echoserver
+./echoserver
+
+gcc client.c lib_utils.c lib_ios.c lib_socket.c str_cli.c -o echoclient
+./echoclient <IP>
+----
+
+[source, bash]
+.*Docker*
+----
+docker build -t echoserver .
+docker tag echoserver:latest cloudadc/echoserver:1.1
+docker push cloudadc/echoserver:1.1
+
+docker run -p 8877:8877 cloudadc/echoserver:1.1
+----
+
+== 用户手册
+
+.*标准因特网服务*
+|===
+|名称 |命令 |说明
+
+|时间获取
+|daytime
+|返回一个可读的时间和日期
+
+|字符生成
+|chargen
+|返回一个随机字符串
+
+|流逝时间获取
+|time
+|返回一个 32 位数值时间
+
+|===

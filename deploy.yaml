@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+  name: echoserver
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: echoserver
+  name: echoserver
+  namespace: echoserver
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: echoserver
+  template:
+    metadata:
+      labels:
+        app: echoserver
+    spec:
+      containers:
+      - image: cloudadc/echoserver:1.1
+        name: echoserver
+        ports:
+        - containerPort: 8877
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    cis.f5.com/as3-tenant: echoserver
+    cis.f5.com/as3-app: echoserver
+    cis.f5.com/as3-pool: echoserver_svc_pool
+  name: echoserver-svc
+  namespace: echoserver
+spec:
+  ports:
+  - port: 8877
+    protocol: TCP
+    targetPort: 8877
+  selector:
+    app: echoserver
+  sessionAffinity: None
+  type: ClusterIP
