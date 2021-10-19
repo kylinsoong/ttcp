@@ -5,7 +5,7 @@
 * 服务器端，监听在 8877 端口提供服务
 * 客户端，需要传入一个参数(服务器端的 IP 地址)，根据传入的参数建立服务器端连接后输入相应的命令，建立完成后接收服务器端返回字符串，并打印输出。
 
-== 编译运行
+== 编译
 
 [source, bash]
 .*获取代码*
@@ -18,21 +18,65 @@ $ cd networks/echo/
 .*编译运行*
 ----
 gcc server.c lib_utils.c lib_ios.c lib_socket.c str_echo.c -o echoserver
-./echoserver
 
 gcc client.c lib_utils.c lib_ios.c lib_socket.c str_cli.c -o echoclient
-./echoclient <IP>
 ----
+
+== 本地运行
+
+[source, bash]
+.*1. 启动服务端*
+----
+./echoserver
+----
+
+[source, bash]
+.*2. 启动客户端*
+----
+$ ./echoclient 127.0.0.1
+time
+1634442386
+daytime
+Sun Oct 17 11:46:30 2021
+----
+
+== 容器镜像
 
 [source, bash]
 .*Docker*
 ----
+cd src
 docker build -t echoserver .
-docker tag echoserver:latest cloudadc/echoserver:1.1
-docker push cloudadc/echoserver:1.1
-
-docker run -p 8877:8877 cloudadc/echoserver:1.1
+docker tag echoserver:latest cloudadc/echoserver:1.2
+docker push cloudadc/echoserver:1.2
 ----
+
+== 容器运行
+
+[source, bash]
+.*1. 启动服务端*
+----
+docker run -itd --rm --name server cloudadc/echoserver:1.2 
+----
+
+[source, bash]
+.*2. 启动客户端*
+----
+docker run -itd --rm --name client cloudadc/echoserver:1.2 
+----
+
+[source, bash]
+.*3. 执行测试*
+----
+$ docker exec -it client sh
+/app # ./echoclient 172.17.0.2
+time
+1634443146
+daytime
+Sun Oct 17 03:59:09 2021
+----
+
+== K8S 运行
 
 == 用户手册
 

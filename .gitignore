@@ -1,0 +1,26 @@
+# Ignore .svn metadata files
+.svn
+.mvn
+ 
+#Ignore Maven generated target folders
+target
+
+# Ignore eclipse files
+.project
+.classpath
+.settings
+
+# Ignore IDEA files
+*.iml
+*.ipr
+*.iws
+/.idea
+
+war
+gwt-unitCache
+
+.DS_Store
+
+# gitbook
+node_modules
+_book
