@@ -9,3 +9,9 @@ clean:
 	rm -f tcp-chat-client
 	rm -f tcp-echo-server
 	rm -f tcp-echo-client
+install:
+	mkdir -p $(DESTDIR)/usr/bin
+	install -m 0755 tcp-chat-server $(DESTDIR)/usr/bin/tcp-chat-server
+	install -m 0755 tcp-chat-client $(DESTDIR)/usr/bin/tcp-chat-client
+	install -m 0755 tcp-echo-server $(DESTDIR)/usr/bin/tcp-echo-server
+	install -m 0755 tcp-echo-client $(DESTDIR)/usr/bin/tcp-echo-client
