@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #define MAX 80
-#define PORT 8080
+#define PORT 8878
 #define SA struct sockaddr
 
 // Function designed for chat between client and server.
@@ -20,8 +20,14 @@ void func(int connfd)
 
 		// read the message from client and copy it in buffer
 		read(connfd, buff, sizeof(buff));
+
+                if (strncmp("exit", buff, 4) == 0) {
+                    printf("Receive 'exit' signal from client..\n");
+                    sleep(4);
+                    exit(1);
+                }
 		// print buffer which contains the client contents
-		printf("From client: %s\t To client : ", buff);
+		printf("From client(%d) : %s\t To client(%d) : ", connfd, buff, connfd);
 		bzero(buff, MAX);
 		n = 0;
 		// copy server message in the buffer
@@ -33,7 +39,7 @@ void func(int connfd)
 
 		// if msg contains "Exit" then server exit and chat ended.
 		if (strncmp("exit", buff, 4) == 0) {
-			printf("Server Exit...\n");
+                        printf("Send 'exit' signal to client..\n");
 			break;
 		}
 	}
@@ -84,11 +90,13 @@ int main()
 		exit(0);
 	}
 	else
-		printf("server accept the client...\n");
+		printf("Server accept the client(%d)...\n", connfd);
 
 	// Function for chatting between client and server
 	func(connfd);
 
 	// After chatting close the socket
+	printf("Client close the socket(%d)...\n", sockfd);
+        sleep(2);
 	close(sockfd);
 }

@@ -1,0 +1,71 @@
+= What's this
+
+Primary purpose of this project is demonstrating the TCP's `Three Times Handshake` for establish a connection, and `Four Times Handshake` for close a connection.
+
+This is a chat program, that client and server can chat each other, either client or server can send 'exit' signal to other side for ending the chat.
+
+== Build 
+
+[source, bash]
+----
+gcc chatserver.c -o tcp-chat-server
+gcc chatclient.c -o tcp-chat-client
+----
+
+== Run
+
+[source, bash]
+.*Server*
+----
+$ tcp-chat-server 
+Socket successfully created..
+Socket successfully binded..
+Server listening..
+Server accept the client(4)...
+From client(4) : hello
+	 To client(4) : exit
+Send 'exit' signal to client..
+Client close the socket(3)...
+----
+
+[source, bash]
+.*Client*
+----
+$ tcp-chat-client 10.1.10.6 8878
+Socket successfully created(3)..
+connected to the server(3)..
+Enter the string(3) : hello
+----
+
+== Three Times Handshake
+
+Each time client connect to server will process a 3 times handshake:
+
+[source, bash]
+----
+17:30:55.883856 IP chat-client.42620 > chat-server.8878: Flags [S], seq 4044800396, win 29200, options [mss 1460,sackOK,TS val 4294944614 ecr 0,nop,wscale 7], length 0
+17:30:55.883882 IP chat-server.8878 > chat-client.42620: Flags [S.], seq 1228695765, ack 4044800397, win 28960, options [mss 1460,sackOK,TS val 550297 ecr 4294944614,nop,wscale 7], length 0
+17:30:55.884311 IP chat-client.42620 > chat-server.8878: Flags [.], ack 1, win 229, options [nop,nop,TS val 4294944615 ecr 550297], length 0
+----
+
+== Four Times Handshake
+
+The client send 'exit' signal to server will simulate a *Active Close*, accordingly the server send 'exit' signal to client will simulate a *Passive Close*.
+
+[source, bash]
+.*Active Close*
+----
+17:31:31.908950 IP chat-client.42620 > chat-server.8878: Flags [F.], seq 81, ack 1, win 229, options [nop,nop,TS val 13331 ecr 584320], length 0
+17:31:31.949050 IP chat-server.8878 > chat-client.42620: Flags [.], ack 82, win 227, options [nop,nop,TS val 586362 ecr 13331], length 0
+17:31:33.909179 IP chat-server.8878 > chat-client.42620: Flags [F.], seq 1, ack 82, win 227, options [nop,nop,TS val 588322 ecr 13331], length 0
+17:31:33.910129 IP chat-client.42620 > chat-server.8878: Flags [.], ack 2, win 229, options [nop,nop,TS val 15332 ecr 588322], length 0
+----
+
+[source, bash]
+.*Passive Close*
+----
+17:33:21.541507 IP chat-server.8878 > chat-client.42622: Flags [F.], seq 81, ack 81, win 227, options [nop,nop,TS val 695954 ecr 120954], length 0
+17:33:21.582513 IP chat-client.42622 > chat-server.8878: Flags [.], ack 82, win 229, options [nop,nop,TS val 122995 ecr 695954], length 0
+17:33:23.542677 IP chat-client.42622 > chat-server.8878: Flags [F.], seq 81, ack 82, win 229, options [nop,nop,TS val 124954 ecr 695954], length 0
+17:33:23.542703 IP chat-server.8878 > chat-client.42622: Flags [.], ack 82, win 227, options [nop,nop,TS val 697955 ecr 124954], length 0
+----
