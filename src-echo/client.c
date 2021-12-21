@@ -9,15 +9,17 @@ int main(int argc, char **argv)
 {
     int                sockfd;
     struct sockaddr_in servaddr;
+    int port;
 
-    if (argc != 2)
-        err_sys("usage: echoclient <IPaddress>");
+    if (argc != 3)
+        err_sys("usage: tcp-echo-client <IP> <PORT>");
 
     sockfd = Socket(AF_INET, SOCK_STREAM, 0);
 
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(SERV_PORT);
+    port = atoi(argv[2]);
+    servaddr.sin_port = htons(port);
     Inet_pton(AF_INET, argv[1], &servaddr.sin_addr);
 
     Connect(sockfd, (SA *) &servaddr, sizeof(servaddr));
