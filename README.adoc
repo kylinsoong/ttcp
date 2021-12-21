@@ -1,4 +1,41 @@
 = What's this
 
 
+== Make a release
 
+[source, text]
+.*1. setup tree*
+----
+# rm -fr ~/rpmbuild
+# rpmdev-setuptree
+# tree ~/rpmbuild
+/root/rpmbuild
+|-- BUILD
+|-- RPMS
+|-- SOURCES
+|-- SPECS
+`-- SRPMS
+----
+
+[source, text]
+.*2. Copy Source*
+----
+mkdir l4-client-server-1.0
+cp -r src-* l4-client-server-1.0
+cp Makefile l4-client-server-1.0
+tar -cf l4-client-server-1.0.tar.gz l4-client-server-1.0
+rm l4-client-server-1.0
+mv l4-client-server-1.0.tar.gz ~/rpmbuild/SOURCES/
+rpmbuild -bs l4-client-server.spec
+----
+
+[source, text]
+.*3. Build Binary*
+----
+# rpmbuild -bb l4-client-server.spec
+# tree ~/rpmbuild/RPMS/
+/root/rpmbuild/RPMS/
+`-- x86_64
+    |-- l4-client-server-1.0-1.x86_64.rpm
+    `-- l4-client-server-debuginfo-1.0-1.x86_64.rpm
+----
