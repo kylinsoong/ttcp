@@ -1,5 +1,52 @@
 = What's this
 
+== Available Service
+
+[cols="2,5a"]
+|===
+|SERVICE |NOTES
+
+|echo
+|A group of standard internet services including `echo`, `daytime`, `time`,
+
+[source, bash]
+.*Server*
+----
+tcp-echo-server
+----
+
+This will start echo server, bind to 0.0.0.0 and port 8877.
+
+[source, bash]
+.*Client*
+----
+tcp-echo-client <IP> <PORT>
+----
+
+* <IP> - Server listened IP
+* <PORT> - Server binded Port
+
+|chat
+|A client server chat program.
+
+[source, bash]
+.*Server*
+----
+tcp-chat-server
+----
+
+This will start chat server, bind to 0.0.0.0 and port 8878.
+
+[source, bash]
+.*Client*
+----
+tcp-chat-client <IP> <PORT> <CLIENT_PORT>
+----
+
+* <IP> - Server listened IP
+* <PORT> - Server binded Port
+* <CLIENT_PORT> - Optional, Explicitly assigning a Port to client socket.
+|===
 
 == Make a release
 

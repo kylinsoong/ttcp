@@ -37,10 +37,10 @@ void func(int sockfd)
 int main(int argc, char **argv)
 {
 	int sockfd, connfd;
-	struct sockaddr_in servaddr, cli;
-        int port;
+	struct sockaddr_in servaddr, clientaddr;
+        int port, clientport;
 
-        if (argc != 3) {
+        if (argc < 3) {
             printf("%s\n", "usage: tcp-chat-client <SERVER_IP> <SERVER_PORT>");
             exit(1);
         }
@@ -60,6 +60,20 @@ int main(int argc, char **argv)
 	servaddr.sin_addr.s_addr = inet_addr(argv[1]);
         port = atoi(argv[2]);
 	servaddr.sin_port = htons(port);
+
+        if (argc == 4) {
+            clientaddr.sin_family = AF_INET;
+            clientaddr.sin_addr.s_addr = INADDR_ANY;
+            clientport = atoi(argv[3]);
+            clientaddr.sin_port = htons(clientport);
+           
+            if (bind(sockfd, (struct sockaddr*) &clientaddr, sizeof(struct sockaddr_in)) == 0) {
+                printf("Explicitly bind %d to client\n", clientport);
+            } else {
+                printf("Unable to bind\n");
+                exit(1);
+            }
+        }
 
 	// connect the client socket to server socket
 	if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) {
