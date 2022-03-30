@@ -87,7 +87,7 @@ int main(int argc, char **argv)
 	func(sockfd);
 
 	// close the socket
-	printf("Client close the socket(%d)...\n", sockfd);
+	printf("Client will close the socket(%d) after 2 seconds...\n", sockfd);
         sleep(2);
 	close(sockfd);
 }
