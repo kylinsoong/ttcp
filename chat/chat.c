@@ -17,20 +17,22 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-
 #define MAX 80
-#define PORT 8878
-#define SA struct sockaddr
 
 struct sockaddr_storage sinme;
+struct sockaddr_storage sinhim;
+struct sockaddr_storage frominet;
 
+int domain, fromlen;
 int fd;                         /* fd of network socket */
 short port = 8878;              /* TCP port number */
+char *host;			/* ptr to name of host */
 short sPort;                    /* TCP source port number */
 int server = 1;                 /* 0=client, 1=server */
 int initiate = 0;
 
 extern int errno;
+extern int optind;
 extern char *optarg;
 
 char Usage[] = "\
@@ -45,6 +47,8 @@ Common options:\n\
 
 void err();
 void mes();
+void funcs();
+void funcc();
 
 int main(int argc, char **argv) {
   
@@ -53,6 +57,8 @@ int main(int argc, char **argv) {
     int c;
 
     memset(&sinme, 0, sizeof(&sinme));
+    memset(&sinhim, 0, sizeof(&sinhim));
+    memset(&frominet, 0, sizeof(&frominet));
 
     while ((c = getopt(argc, argv, "46cp:P:s")) != -1) {
         switch (c) {
@@ -85,11 +91,37 @@ int main(int argc, char **argv) {
 
     if(initiate) {
         struct addrinfo *dest;
-        printf("chat client connect()\n");
-    } else {
 
-        printf("chat server accept()\n");
- 
+        if (optind == argc) {
+            goto usage;
+        }
+
+        bzero((char *)&sinhim, sizeof(sinhim));
+        host = argv[optind];
+
+        if(getaddrinfo(host, NULL, NULL, &dest)!=0) {
+            err("badhostname");
+        }
+
+        memcpy((void*)&sinhim,(void*)dest->ai_addr, dest->ai_addrlen);
+
+        switch(sinhim.ss_family) {
+        case AF_INET:
+            ((struct sockaddr_in *)&sinhim)->sin_port = htons(port);
+                  /* free choice */
+            ((struct sockaddr_in *)&sinme)->sin_port = 0;
+            break;
+
+        case AF_INET6:
+            ((struct sockaddr_in6 *)&sinhim)->sin6_port = htons(port);
+                  /* free choice */
+            ((struct sockaddr_in6 *)&sinme)->sin6_port = 0;
+            break;
+        }
+
+        sinme.ss_family = sinhim.ss_family;
+
+    } else {
         switch(sinme.ss_family) {
         case AF_INET:
             ((struct sockaddr_in *)&sinme)->sin_port = htons(port);
@@ -101,6 +133,7 @@ int main(int argc, char **argv) {
 
         default:
             fprintf(stderr, "chat server must specify address family: %u\n", sinme.ss_family);
+            goto usage;
         }
     }
 
@@ -110,13 +143,59 @@ int main(int argc, char **argv) {
 
     mes("socket");
 
-    printf("%d, %d, %d, %d \n", server, port, sPort, initiate);
-    exit(0);
+    if(!initiate) {
+        if (bind(fd, (struct sockaddr *)&sinme, sizeof(sinme)) < 0) {
+            err("bind");
+        }
+    } 
+
+    if (initiate) {
+
+        if(connect(fd, (struct sockaddr *)&sinhim, sizeof(sinhim) ) < 0) {
+            err("connect");
+        }
+                
+        mes("connect");
+
+        funcs(fd, host);
+    } else {
+        if ((listen(fd, 5)) != 0) {
+            err("listen");
+        }
+
+        if((fd = accept(fd, (struct sockaddr *)&frominet, &fromlen) ) < 0) {
+            err("accept");
+        }
+
+        {
+            struct sockaddr_storage peer;
+            int peerlen = sizeof(peer);
+            char namebuf[256];
+ 
+            if (getpeername(fd, (struct sockaddr *) &peer, &peerlen) < 0) {
+                err("getpeername");
+            }
+
+            switch(peer.ss_family) {
+            case AF_INET:
+                inet_ntop(peer.ss_family, &((struct sockaddr_in *)&peer)->sin_addr, namebuf, 256);
+                break;
+            case AF_INET6:
+                inet_ntop(peer.ss_family, &((struct sockaddr_in6 *)&peer)->sin6_addr, namebuf, 256);
+                break;
+            } 
+
+            fprintf(stderr,"chat-s: accept from %s\n", namebuf);  
+
+            funcs(fd, namebuf);
+        }
+    }
 
     usage:
         fprintf(stderr,Usage);
         exit(1);
 }
+
 
 void err(char *s)
 {
@@ -129,4 +208,65 @@ void err(char *s)
 void mes(char *s)
 {
     fprintf(stderr, "chat%s: %s\n", server ? "-s" : "-c", s);
+}
+
+void funcs(int connfd, char *source)
+{
+    char buff[MAX];
+    int n;
+
+    for (;;) {
+
+        bzero(buff, MAX);
+
+        // read the message from client and copy it in buffer
+        read(connfd, buff, sizeof(buff));
+        fprintf(stderr,"%s: %s", source, buff);
+        
+        if (strncmp("exit", buff, 4) == 0) {
+            exit(1);
+        }
+
+        bzero(buff, MAX);
+        n = 0;
+
+        printf("chat-s: ");
+        while ((buff[n++] = getchar()) != '\n');
+
+        // and send that buffer to client
+        write(connfd, buff, sizeof(buff));
+        
+        if (strncmp("exit", buff, 4) == 0) {
+            exit(1);
+        }
+
+    }    
+}
+
+void funcc(int sockfd, char *source)
+{
+    char buff[MAX];
+    int n;
+
+    for (;;) {
+
+        bzero(buff, sizeof(buff));
+        printf("chat-c: ");
+        n = 0;
+        while ((buff[n++] = getchar()) != '\n');
+
+        write(sockfd, buff, sizeof(buff));
+      
+        if ((strncmp(buff, "exit", 4)) == 0) {
+           exit(1);
+        }
+
+        bzero(buff, sizeof(buff));
+        read(sockfd, buff, sizeof(buff));
+        fprintf(stderr,"%s: %s", source, buff);
+
+        if ((strncmp(buff, "exit", 4)) == 0) {
+           exit(1);
+        }
+    }
 }
