@@ -6,6 +6,9 @@
 |===
 |SERVICE |NOTES
 
+|ttcp
+|Test TCP Utility.
+
 |echo
 |A group of standard internet services including `echo`, `daytime`, `time`,
 
