@@ -6,6 +6,8 @@
  *
  * Created under Apache License Version 2.0 at Nov, 2021.
  *       Kylin Soong 
+ * IPv6 support
+ * Client source port binding ability.
  *
  */
 
@@ -27,7 +29,7 @@ int domain, fromlen;
 int fd;                         /* fd of network socket */
 short port = 8878;              /* TCP port number */
 char *host;			/* ptr to name of host */
-short sPort;                    /* TCP source port number */
+short sPort = 0;                    /* TCP source port number */
 int server = 1;                 /* 0=client, 1=server */
 int initiate = 0;
 
@@ -121,6 +123,19 @@ int main(int argc, char **argv) {
 
         sinme.ss_family = sinhim.ss_family;
 
+        if(sPort > 0) {
+            switch(sinme.ss_family) {
+            case AF_INET:
+                ((struct sockaddr_in *)&sinme)->sin_port = htons(sPort);
+                break;
+            case AF_INET6:
+                ((struct sockaddr_in6 *)&sinme)->sin6_port = htons(sPort);
+                break;
+            default:
+                break;
+            }
+        } 
+
     } else {
         switch(sinme.ss_family) {
         case AF_INET:
@@ -143,10 +158,11 @@ int main(int argc, char **argv) {
 
     mes("socket");
 
-    if(!initiate) {
+    if(!initiate || sPort > 0) {
         if (bind(fd, (struct sockaddr *)&sinme, sizeof(sinme)) < 0) {
             err("bind");
         }
+        mes("bind");
     } 
 
     if (initiate) {
@@ -157,7 +173,7 @@ int main(int argc, char **argv) {
                 
         mes("connect");
 
-        funcs(fd, host);
+        funcc(fd, host);
     } else {
         if ((listen(fd, 5)) != 0) {
             err("listen");
