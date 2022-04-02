@@ -4,7 +4,7 @@
 == How to create a rpm?
 
 [source, bash]
-.*1. Installing the required software*
+.*1. Install the required software*
 ----
 yum install -y rpmdevtools rpmlint
 ----
@@ -17,4 +17,10 @@ Update the `Version` and `Release` as a larger version, update the `Name` if you
 Name:           l4-client-server
 Version:        x.x
 Release:        x
+----
+
+[source, bash]
+.*3. Run 'release.sh'*
+----
+./release.sh
 ----
