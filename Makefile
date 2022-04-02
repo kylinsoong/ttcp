@@ -1,17 +1,13 @@
 build:
-	gcc src-chat/chatserver.c -o tcp-chat-server
-	gcc src-chat/chatclient.c -o tcp-chat-client
-	gcc src-echo/server.c src-echo/lib_utils.c src-echo/lib_ios.c src-echo/lib_socket.c src-echo/str_echo.c -o tcp-echo-server
-	gcc src-echo/client.c src-echo/lib_utils.c src-echo/lib_ios.c src-echo/lib_socket.c src-echo/str_cli.c -o tcp-echo-client
-	ls -ll tcp-*
+	gcc chat/chat.c -o chat/chat
+	gcc echoS/echoS.c -o echoS/echoS
+	gcc ttcp/ttcp.c -o ttcp/ttcp
 clean:
-	rm -f tcp-chat-server
-	rm -f tcp-chat-client
-	rm -f tcp-echo-server
-	rm -f tcp-echo-client
+	rm -f ttcp/ttcp 
+	rm -f chat/chat
+	rm -f echoS/echoS
 install:
 	mkdir -p $(DESTDIR)/usr/bin
-	install -m 0755 tcp-chat-server $(DESTDIR)/usr/bin/tcp-chat-server
-	install -m 0755 tcp-chat-client $(DESTDIR)/usr/bin/tcp-chat-client
-	install -m 0755 tcp-echo-server $(DESTDIR)/usr/bin/tcp-echo-server
-	install -m 0755 tcp-echo-client $(DESTDIR)/usr/bin/tcp-echo-client
+	install -m 0755 ttcp/ttcp $(DESTDIR)/usr/bin/ttcp
+	install -m 0755 chat/chat $(DESTDIR)/usr/bin/chat
+	install -m 0755 echoS/echoS $(DESTDIR)/usr/bin/echoS

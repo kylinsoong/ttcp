@@ -1,0 +1,20 @@
+= Development Guide
+:toc: manual
+
+== How to create a rpm?
+
+[source, bash]
+.*1. Installing the required software*
+----
+yum install -y rpmdevtools rpmlint
+----
+
+*2. Update 'release.spec'*
+
+Update the `Version` and `Release` as a larger version, update the `Name` if you want to change the rpm name.
+
+----
+Name:           l4-client-server
+Version:        x.x
+Release:        x
+----

@@ -1,91 +1,9 @@
 = What's this
 
-== Available Service
+A group of L4(TCP/UDP) client server app, that used to Deep Dive into L4 protocol, or performance benchmark.
 
-[cols="2,5a"]
-|===
-|SERVICE |NOTES
+* chat  - chat messages from stdin and socket strams. 
+* echoS - display a line of text over socket stream.
+* ttcp  - test tcp connection, transfers fabricated buffers or data copied from stdin
 
-|ttcp
-|Test TCP Utility.
-
-|echo
-|A group of standard internet services including `echo`, `daytime`, `time`,
-
-[source, bash]
-.*Server*
-----
-tcp-echo-server
-----
-
-This will start echo server, bind to 0.0.0.0 and port 8877.
-
-[source, bash]
-.*Client*
-----
-tcp-echo-client <IP> <PORT>
-----
-
-* <IP> - Server listened IP
-* <PORT> - Server binded Port
-
-|chat
-|A client server chat program.
-
-[source, bash]
-.*Server*
-----
-tcp-chat-server
-----
-
-This will start chat server, bind to 0.0.0.0 and port 8878.
-
-[source, bash]
-.*Client*
-----
-tcp-chat-client <IP> <PORT> <CLIENT_PORT>
-----
-
-* <IP> - Server listened IP
-* <PORT> - Server binded Port
-* <CLIENT_PORT> - Optional, Explicitly assigning a Port to client socket.
-|===
-
-== Make a release
-
-[source, text]
-.*1. setup tree*
-----
-# rm -fr ~/rpmbuild
-# rpmdev-setuptree
-# tree ~/rpmbuild
-/root/rpmbuild
-|-- BUILD
-|-- RPMS
-|-- SOURCES
-|-- SPECS
-`-- SRPMS
-----
-
-[source, text]
-.*2. Copy Source*
-----
-mkdir l4-client-server-1.0
-cp -r src-* l4-client-server-1.0
-cp Makefile l4-client-server-1.0
-tar -cf l4-client-server-1.0.tar.gz l4-client-server-1.0
-rm l4-client-server-1.0
-mv l4-client-server-1.0.tar.gz ~/rpmbuild/SOURCES/
-rpmbuild -bs l4-client-server.spec
-----
-
-[source, text]
-.*3. Build Binary*
-----
-# rpmbuild -bb l4-client-server.spec
-# tree ~/rpmbuild/RPMS/
-/root/rpmbuild/RPMS/
-`-- x86_64
-    |-- l4-client-server-1.0-1.x86_64.rpm
-    `-- l4-client-server-debuginfo-1.0-1.x86_64.rpm
-----
+Refer to link:DEVGUIDE.adoc[Developer Guide] for development reference, and link:USERGUIDE.adoc[User Guide] for usage reference.
