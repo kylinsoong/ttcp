@@ -9,14 +9,23 @@ Install on Red Hat Linux via:
 rpm -ivh l4-client-server-1.1-1.x86_64.rpm
 ----
 
-== Errors
+== Err codes
 
 |===
 |errno |description |note
 
 |98
 |Address already in use
-|
+|bind() failed due to address already in use
+
+|111
+|Connection refused
+|connect() failed due to incorrect port
+
+|113
+|No route to host
+|connect() failed due to incorrect host
+
 
 |===
 

@@ -71,6 +71,7 @@ void     Bind(int, const struct sockaddr *, socklen_t);
 void     Listen(int, int);
 int      Accept(int, struct sockaddr *, socklen_t *);
 void     Connect(int, const struct sockaddr *, socklen_t);
+char     *Getpeername(int);
 
 /* IO */
 void     Close(int);
@@ -91,7 +92,7 @@ ssize_t  readline(int, void *, size_t);
 ssize_t  my_read(int fd, char *ptr);
 
 /* Core logic entries*/
-void     Str_echo(int);
+void     Str_echo(int, const char *);
 void     Str_cli(FILE *, int);
 
 
@@ -219,33 +220,12 @@ int main(int argc, char **argv)
 
             connfd = Accept(fd, (struct sockaddr *)&frominet, &fromlen);
 
-            {
-                struct sockaddr_storage peer;
-                int peerlen = sizeof(peer);
-                char namebuf[256];
-                uint16_t port;
-
-                if (getpeername(connfd, (struct sockaddr *) &peer, &peerlen) < 0) {
-                    err_sys("getpeername");
-                }
-
-                switch(peer.ss_family) {
-                case AF_INET:
-                    inet_ntop(peer.ss_family, &((struct sockaddr_in *)&peer)->sin_addr, namebuf, 256);
-                    port = ntohs(((struct sockaddr_in *)&peer)->sin_port);
-                    break;
-                case AF_INET6:
-                    inet_ntop(peer.ss_family, &((struct sockaddr_in6 *)&peer)->sin6_addr, namebuf, 256);
-                    port = ntohs(((struct sockaddr_in6 *)&peer)->sin6_port);
-                    break;
-                }
-
-                fprintf(stderr,"echoS: accept from %s:%u\n", namebuf, port);
-            }
+            char *peer = Getpeername(connfd);
+            out_sys(concat("accept from ", peer));
 
             if ((childpid = Fork()) == 0) {
                 Close(fd); /* for address bad file descriptor */
-                Str_echo(connfd);
+                Str_echo(connfd, peer);
                 exit(0);
             }
 
@@ -304,10 +284,41 @@ int Accept(int fd, struct sockaddr *sa, socklen_t *salenptr)
     return (sock);
 }
 
+char *Getpeername(int connfd)
+{
+    char      buf[300];
+    char      namebuf[256];
+    in_port_t port;
+ 
+    struct sockaddr_storage peer;
+    int peerlen = sizeof(peer);
+
+    if (getpeername(connfd, (struct sockaddr *) &peer, &peerlen) < 0) {
+        err_sys("getpeername");
+    }
+
+    switch(peer.ss_family) {
+    case AF_INET:
+        inet_ntop(peer.ss_family, &((struct sockaddr_in *)&peer)->sin_addr, namebuf, 256);
+        port = ntohs(((struct sockaddr_in *)&peer)->sin_port);
+        break;
+    case AF_INET6:
+        inet_ntop(peer.ss_family, &((struct sockaddr_in6 *)&peer)->sin6_addr, namebuf, 256);
+        port = ntohs(((struct sockaddr_in6 *)&peer)->sin6_port);
+        break;
+    }
+
+    snprintf(buf, sizeof(buf), "%s:%u", namebuf, port);
+    char *result = malloc(strlen(buf) +1);
+    strcpy(result, buf);
+
+    return result;
+}
+
 void Close(int fd)
 {
     if (close(fd) == -1)
-        err_sys("close error");
+        err_sys("close");
 }
 
 void err_sys(const char *fmt, ...)
@@ -337,7 +348,7 @@ char *Fgets(char *ptr, int n, FILE *stream)
     char    *rptr;
 
     if ( (rptr = fgets(ptr, n, stream)) == NULL && ferror(stream))
-        err_sys("fgets error");
+        err_sys("fgets");
 
     return (rptr);
 }
@@ -345,7 +356,7 @@ char *Fgets(char *ptr, int n, FILE *stream)
 void Fputs(const char *ptr, FILE *stream)
 {
     if (fputs(ptr, stream) == EOF)
-        err_sys("fputs error");
+        err_sys("fputs");
 }
 
 char *concat(const char *s1, const char *s2)
@@ -372,14 +383,14 @@ pid_t Fork(void)
     pid_t pid;
 
     if ((pid = fork()) == -1)
-        err_sys("fork error");
+        err_sys("fork");
     return (pid);
 }
 
 void Writen(int fd, void *ptr, size_t nbytes){
 
     if (writen(fd, ptr, nbytes) != nbytes)
-        err_sys("writen error");
+        err_sys("writen");
 }
 
 ssize_t writen(int fd, const void *vptr, size_t n)
@@ -410,7 +421,7 @@ ssize_t Readline(int fd, void *ptr, size_t maxlen)
     ssize_t n;
 
     if ( (n = readline(fd, ptr, maxlen)) < 0)
-        err_sys("readline error");
+        err_sys("readline");
 
     return (n);
 }
@@ -464,7 +475,7 @@ ssize_t my_read(int fd, char *ptr)
 }
 
 
-void Str_echo(int sockfd)
+void Str_echo(int connfd, const char *peer)
 {
     ssize_t         n;
     char            line[MAXLINE], sendBuff[BUFSIZE];
@@ -472,28 +483,28 @@ void Str_echo(int sockfd)
 
     for(;;) {
 
-        n = Readline(sockfd, line, MAXLINE);
+        n = Readline(connfd, line, MAXLINE);
 
         if(n < 0) {
-            err_sys("read error");
+            err_sys("read");
         } else if (n == 0) {
-            out_sys("connection closed by other end");
+            out_sys(concat("connection closed by ", peer));
             return;
         }
 
         if(strcmp(line, concat(STR_DATTIME, STR_ENTER)) == 0) {
             ticks = time(NULL);
             snprintf(sendBuff, sizeof(sendBuff), "%.24s\r\n", ctime(&ticks));
-            write(sockfd, sendBuff, strlen(sendBuff));
+            write(connfd, sendBuff, strlen(sendBuff));
         } else if(strcmp(line, concat(STR_TIME, STR_ENTER)) == 0) {
             time_t now = time(0);
             sprintf (sendBuff, "%lu\n" , now);
-            write(sockfd, sendBuff, strlen(sendBuff));
+            write(connfd, sendBuff, strlen(sendBuff));
         } else if (strcmp(line, concat(STR_CHARGEN, STR_ENTER)) == 0) {
             snprintf(sendBuff, sizeof(sendBuff), "%s\n", randstring(48));
-            write(sockfd, sendBuff, strlen(sendBuff));
+            write(connfd, sendBuff, strlen(sendBuff));
         } else{
-            Writen(sockfd, line, n);
+            Writen(connfd, line, n);
         }
     }
 }
