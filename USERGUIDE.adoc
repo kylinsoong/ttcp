@@ -1,43 +1,28 @@
-= What's this
+= User Guide
+:toc: manual
 
-Primary purpose of this project is demonstrating the TCP's `Three Times Handshake` for establish a connection, and `Four Times Handshake` for close a connection.
+== Installation
 
-This is a chat program, that client and server can chat each other, either client or server can send 'exit' signal to other side for ending the chat.
+Install on Red Hat Linux via:
 
-== Build 
-
-[source, bash]
 ----
-gcc chatserver.c -o tcp-chat-server
-gcc chatclient.c -o tcp-chat-client
+rpm -ivh l4-client-server-1.1-1.x86_64.rpm
 ----
 
-== Run
+== Errors
 
-[source, bash]
-.*Server*
-----
-$ tcp-chat-server 
-Socket successfully created..
-Socket successfully binded..
-Server listening..
-Server accept the client(4)...
-From client(4) : hello
-	 To client(4) : exit
-Send 'exit' signal to client..
-Client close the socket(3)...
-----
+|===
+|errno |description |note
 
-[source, bash]
-.*Client*
-----
-$ tcp-chat-client 10.1.10.6 8878
-Socket successfully created(3)..
-connected to the server(3)..
-Enter the string(3) : hello
-----
+|98
+|Address already in use
+|
 
-== Three Times Handshake
+|===
+
+== Basic Process
+
+=== Three Times Handshake
 
 Each time client connect to server will process a 3 times handshake:
 
@@ -48,7 +33,7 @@ Each time client connect to server will process a 3 times handshake:
 17:30:55.884311 IP chat-client.42620 > chat-server.8878: Flags [.], ack 1, win 229, options [nop,nop,TS val 4294944615 ecr 550297], length 0
 ----
 
-== Four Times Handshake
+=== Four Times Handshake
 
 The client send 'exit' signal to server will simulate a *Active Close*, accordingly the server send 'exit' signal to client will simulate a *Passive Close*.
 

@@ -65,6 +65,13 @@ Common options:\n\
         -P ##   for -c, port number for client source port\n\
 ";
 
+/* Socket */
+int      Socket(int, int, int);
+void     Bind(int, const struct sockaddr *, socklen_t);
+void     Listen(int, int);
+int      Accept(int, struct sockaddr *, socklen_t *);
+void     Connect(int, const struct sockaddr *, socklen_t);
+
 /* IO */
 void     Close(int);
 void     err_sys(const char *, ...);
@@ -188,45 +195,35 @@ int main(int argc, char **argv)
             goto usage;
         }
     }
-    
-    if ((fd = socket(sinme.ss_family, SOCK_STREAM, 0)) < 0) {
-        err_sys("socket");
-    }
 
+    fd = Socket(sinme.ss_family, SOCK_STREAM, 0);
     out_sys("socket");
 
     if(!initiate || sPort > 0) {
-        if (bind(fd, (struct sockaddr *)&sinme, sizeof(sinme)) < 0) {
-            err_sys("bind");
-        }
+
+        Bind(fd, (struct sockaddr *)&sinme, sizeof(sinme));
         out_sys("bind");
     }
 
     if (initiate) {
 
-        if(connect(fd, (struct sockaddr *)&sinhim, sizeof(sinhim) ) < 0) {
-            err_sys("connect");
-        }
-
+        Connect(fd, (struct sockaddr *)&sinhim, sizeof(sinhim));
         out_sys("connect");
-
         Str_cli(stdin, fd);
 
     } else {
-        if ((listen(fd, 5)) != 0) {
-            err_sys("listen");
-        }
+
+        Listen(fd, 5);
 
         for(;;) {
 
-            if((connfd = accept(fd, (struct sockaddr *)&frominet, &fromlen) ) < 0) {
-                err_sys("accept");
-            }
+            connfd = Accept(fd, (struct sockaddr *)&frominet, &fromlen);
 
             {
                 struct sockaddr_storage peer;
                 int peerlen = sizeof(peer);
                 char namebuf[256];
+                uint16_t port;
 
                 if (getpeername(connfd, (struct sockaddr *) &peer, &peerlen) < 0) {
                     err_sys("getpeername");
@@ -235,13 +232,15 @@ int main(int argc, char **argv)
                 switch(peer.ss_family) {
                 case AF_INET:
                     inet_ntop(peer.ss_family, &((struct sockaddr_in *)&peer)->sin_addr, namebuf, 256);
+                    port = ntohs(((struct sockaddr_in *)&peer)->sin_port);
                     break;
                 case AF_INET6:
                     inet_ntop(peer.ss_family, &((struct sockaddr_in6 *)&peer)->sin6_addr, namebuf, 256);
+                    port = ntohs(((struct sockaddr_in6 *)&peer)->sin6_port);
                     break;
                 }
 
-                fprintf(stderr,"echoS: accept from %s\n", namebuf);
+                fprintf(stderr,"echoS: accept from %s:%u\n", namebuf, port);
             }
 
             if ((childpid = Fork()) == 0) {
@@ -259,6 +258,50 @@ int main(int argc, char **argv)
     usage:
         fprintf(stderr,Usage);
         exit(1);
+}
+
+int Socket(int family, int type, int protocol)
+{
+    int listen_sock;
+
+    if ( (listen_sock = socket(family, type, protocol)) < 0)
+        err_sys("socket");
+
+    return (listen_sock);
+}
+
+void Bind(int fd, const struct sockaddr *sa, socklen_t salen)
+{
+    if (bind(fd, sa, salen) < 0)
+        err_sys("bind");
+}
+
+void Connect(int fd, const struct sockaddr *sa, socklen_t salen)
+{
+    if (connect(fd, sa, salen) < 0)
+        err_sys("connect");
+}
+
+void Listen(int fd, int backlog)
+{
+    char *ptr;
+
+    if ((ptr = getenv("LISTENQ")) != NULL) { /*4can override 2nd argument with environment variable */
+        backlog = atoi(ptr);
+    }
+
+    if (listen(fd, backlog) < 0)
+        err_sys("listen");
+}
+
+int Accept(int fd, struct sockaddr *sa, socklen_t *salenptr)
+{
+    int sock;
+
+    if ((sock = accept(fd, sa, salenptr)) < 0)
+        err_sys("accept");
+
+    return (sock);
 }
 
 void Close(int fd)
@@ -432,7 +475,7 @@ void Str_echo(int sockfd)
         n = Readline(sockfd, line, MAXLINE);
 
         if(n < 0) {
-            err_sys("str_echo: read error");
+            err_sys("read error");
         } else if (n == 0) {
             out_sys("connection closed by other end");
             return;
