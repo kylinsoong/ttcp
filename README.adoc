@@ -6,7 +6,7 @@ A group of L4(TCP/UDP) client server app, that used to Deep Dive into L4 protoco
 * echoS - display a line of text over socket stream.
 * ttcp  - test tcp connection, transfers fabricated buffers or data copied from stdin
 
-Refer to link:DEVGUIDE.adoc[Developer Guide] for development reference, and link:USERGUIDE.adoc[User Guide] for usage reference.
+Refer to link:docs/DEVGUIDE.adoc[Developer Guide] for development reference, and link:docs/USERGUIDE.adoc[User Guide] for usage reference.
 
 == How to Contribute
 

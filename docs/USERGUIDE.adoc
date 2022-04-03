@@ -35,6 +35,8 @@ rpm -ivh l4-client-server-1.1-1.x86_64.rpm
 
 Each time client connect to server will process a 3 times handshake:
 
+image:img/3-times-handshake.jpg[]
+
 [source, bash]
 ----
 17:30:55.883856 IP chat-client.42620 > chat-server.8878: Flags [S], seq 4044800396, win 29200, options [mss 1460,sackOK,TS val 4294944614 ecr 0,nop,wscale 7], length 0
