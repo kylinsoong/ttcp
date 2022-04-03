@@ -62,6 +62,9 @@
  *      include stdlib,h (define malloc, required for IA64)
  *      clean compile on Linux (IA64, i686), FreeBSD
  *
+ * Modified Apr. 2022 by Kylin Soong <kylinsoong.1214@gmail.com>
+ *     TODO      
+ *
  * Distribution Status -
  *      Public Domain.  Distribution Unlimited.
  */
@@ -212,8 +215,7 @@ main(int argc, char **argv)
 #ifdef TCP_NODELAY
 			nodelay = 1;
 #else
-			fprintf(stderr, 
-	"ttcp: -D option ignored: TCP_NODELAY socket option not supported\n");
+			fprintf(stderr, "ttcp: -D option ignored: TCP_NODELAY socket option not supported\n");
 #endif
 			break;
 		case 'n':
@@ -247,8 +249,7 @@ main(int argc, char **argv)
 #if defined(SO_SNDBUF) || defined(SO_RCVBUF)
 			sockbufsize = atoi(optarg);
 #else
-			fprintf(stderr, 
-"ttcp: -b option ignored: SO_SNDBUF/SO_RCVBUF socket options not supported\n");
+			fprintf(stderr, "ttcp: -b option ignored: SO_SNDBUF/SO_RCVBUF socket options not supported\n");
 #endif
 			break;
 		case 'f':
@@ -279,13 +280,11 @@ main(int argc, char **argv)
 		if (udp) {
 			/* Check if multicast address */
 			if (res->ai_family == AF_INET6) {
-                               if (IN6_IS_ADDR_MULTICAST(&((struct sockaddr_in6 *)
-                                                           res->ai_addr)->sin6_addr)) {
+                               if (IN6_IS_ADDR_MULTICAST(&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr)) {
                                        maf = AF_INET6;
                                }
 			} else if (res->ai_family == AF_INET) {
-                               if (IN_MULTICAST(ntohl(((struct sockaddr_in *)
-                                                 res->ai_addr)->sin_addr.s_addr))) {
+                               if (IN_MULTICAST(ntohl(((struct sockaddr_in *) res->ai_addr)->sin_addr.s_addr))) {
                                        maf = AF_INET;
                                }
 			}

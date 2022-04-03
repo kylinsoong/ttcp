@@ -9,6 +9,40 @@ Install on Red Hat Linux via:
 rpm -ivh l4-client-server-1.1-1.x86_64.rpm
 ----
 
+== Run
+
+=== ttcp
+
+[source, bash]
+.*Run as Receiver*
+----
+ttcp -r -s -4 -v -p 5050
+----
+
+[source, bash]
+.*Run as Transfer*
+----
+ttcp -t -s -n 10240 -v -4 -p 5050 10.1.20.203
+----
+
+[source, bash]
+.*Collect Results*
+----
+ttcp-r: 83886080 bytes in 1.34 real seconds = 61108.02 KB/sec +++
+ttcp-r: 83886080 bytes in 0.10 CPU seconds = 827040.34 KB/cpu sec
+ttcp-r: 10341 I/O calls, msec/call = 0.13, calls/sec = 7713.84
+ttcp-r: 0.0user 0.0sys 0:01real 6% 0i+0d 330maxrss 0+2pf 368+0csw
+
+ttcp-t: 83886080 bytes in 1.29 real seconds = 63287.18 KB/sec +++
+ttcp-t: 83886080 bytes in 0.03 CPU seconds = 2522633.49 KB/cpu sec
+ttcp-t: 10240 I/O calls, msec/call = 0.13, calls/sec = 7910.90
+ttcp-t: 0.0user 0.0sys 0:01real 1% 0i+0d 362maxrss 0+2pf 122+0csw
+----
+
+=== echoS
+
+=== chat
+
 == Err codes
 
 |===
