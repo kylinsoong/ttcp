@@ -25,6 +25,7 @@
 #include <stdarg.h>
 #include <time.h>
 #include <errno.h>
+#include <signal.h>
 
 #define STR_DATTIME "daytime"
 #define STR_TIME    "time"
@@ -37,6 +38,7 @@
 #define MAXLINE     4096    /* max text line length */
 #define BUFSIZE     1024
 
+typedef void    Sigfunc(int);   /* for signal handlers */
 
 struct sockaddr_storage sinme;
 struct sockaddr_storage sinhim;
@@ -83,6 +85,8 @@ char     *concat(const char *s1, const char *s2);
 char     *randstring(int size);
 
 pid_t    Fork(void);
+void     sig_chld(int);
+Sigfunc  *Signal(int, Sigfunc *);
 
 void     Writen(int, void *, size_t);
 ssize_t  writen(int, const void *, size_t);
@@ -101,6 +105,7 @@ int main(int argc, char **argv)
     if (argc < 2) goto usage;
     
     pid_t              childpid;
+    void               sig_chld(int);
     int c;
 
     memset(&sinme, 0, sizeof(&sinme));
@@ -215,6 +220,8 @@ int main(int argc, char **argv)
     } else {
 
         Listen(fd, 5);
+
+        Signal(SIGCHLD, sig_chld);
 
         for(;;) {
 
@@ -337,9 +344,8 @@ void err_sys(const char *fmt, ...)
 void out_sys(const char *fmt, ...)
 {
     va_list ap;
-
     va_start(ap, fmt);
-    printf("echoS: %s\n", fmt);
+    printf("%lu %d echoS: %s\n", time(0), getpid(), fmt);
     va_end(ap);
 }
 
@@ -378,6 +384,20 @@ char *randstring(int size)
     return res;
 }
 
+void sig_chld(int signo)
+{
+    pid_t   pid;
+    int     stat;
+
+    while ( (pid = waitpid(-1, &stat, WNOHANG)) > 0) {
+       char buf[30];
+       snprintf(buf, sizeof(buf), "child %d terminated", pid);    
+       out_sys(buf);
+    }
+    
+    return;
+}
+
 pid_t Fork(void)
 {
     pid_t pid;
@@ -385,6 +405,15 @@ pid_t Fork(void)
     if ((pid = fork()) == -1)
         err_sys("fork");
     return (pid);
+}
+
+Sigfunc * Signal(int signo, Sigfunc *func)        /* for our signal() function */
+{
+    Sigfunc *sigfunc;
+
+    if ( (sigfunc = signal(signo, func)) == SIG_ERR)
+            err_sys("signal");
+    return(sigfunc);
 }
 
 void Writen(int fd, void *ptr, size_t nbytes){
@@ -480,6 +509,8 @@ void Str_echo(int connfd, const char *peer)
     ssize_t         n;
     char            line[MAXLINE], sendBuff[BUFSIZE];
     time_t          ticks;
+
+    out_sys(concat("server ready, peer: ", peer));
 
     for(;;) {
 
