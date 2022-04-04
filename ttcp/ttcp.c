@@ -294,315 +294,376 @@ int main(int argc, char **argv)
                 }
             }
         }
+
     } else {
         /* rcvr */
         if (udp && optind < argc) {
-			if (inet_pton(AF_INET, argv[optind], &mreq.imr_multiaddr) <= 0) {
-                               if (inet_pton(AF_INET6, argv[optind], &mreq6.ipv6mr_multiaddr) <= 0) {
-                                       fprintf(stderr, "%s is not a multicast address\n", argv[optind]);
-                                       exit(1);
-                               }
-                               /* IPv6 */
-                               if (!IN6_IS_ADDR_MULTICAST(&mreq6.ipv6mr_multiaddr)) {
-                                       fprintf(stderr, "%s is not a multicast address\n", argv[optind]);
-                                       exit(1);
-                               }
-                               hints.ai_family = AF_INET6;
-                               maf = AF_INET6;
-                               mreq6.ipv6mr_interface = 0;
-			} else {
-                               /* IPv4 */
-                               if (!IN_MULTICAST(ntohl(mreq.imr_multiaddr.s_addr))) {
-                                       fprintf(stderr, "%s is not a multicast address\n", argv[optind]);
-                                       exit(1);
-                               }
-                               hints.ai_family = AF_INET;
-                               maf = AF_INET;
-                               mreq.imr_interface.s_addr = INADDR_ANY;
-			}
-			host = argv[optind];
-			hints.ai_flags = AI_NUMERICHOST;
-		} else {
-			host = NULL;
-			hints.ai_flags = AI_PASSIVE;
-		}
-		if (getaddrinfo(host, port, &hints, &res0) != 0) {
-			fprintf(stderr, "can't resolve %s\n", port);
-			exit(1);
-		}
 
-		/* if libc supports ipv6 but kernel doesn't: get the first one */
-		/* XXX: uses ipv6 mapped addresses as generic methods aren't there yet */
-		for (res = res0; res; res = res->ai_next) {
-			if ((fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) > 0)
-				break;
-		}
-	}
+            if (inet_pton(AF_INET, argv[optind], &mreq.imr_multiaddr) <= 0) {
 
-	if (udp && buflen < 5) {
-	    buflen = 5;		/* send more than the sentinel size */
-	}
+                if (inet_pton(AF_INET6, argv[optind], &mreq6.ipv6mr_multiaddr) <= 0) {
+                    fprintf(stderr, "%s is not a multicast address\n", argv[optind]);
+                    exit(1);
+                }
 
-	if ((buf = (char *)malloc(buflen+bufalign)) == (char *)NULL)
-		err("malloc");
-	if (bufalign != 0)
-		buf +=(bufalign - ((size_t)buf % bufalign) + bufoffset) % bufalign;
+                /* IPv6 */
+                if (!IN6_IS_ADDR_MULTICAST(&mreq6.ipv6mr_multiaddr)) {
+                    fprintf(stderr, "%s is not a multicast address\n", argv[optind]);
+                    exit(1);
+                }
 
-	if (trans) {
-		fprintf(stderr, "ttcp-t: buflen=%d, nbuf=%d, align=%d/%d, port=%s",
-			buflen, nbuf, bufalign, bufoffset, port);
-		if (sockbufsize)
- 			fprintf(stderr, ", sockbufsize=%d", sockbufsize);
-		fprintf(stderr, "  %s  -> %s\n", udp ? "udp" : "tcp", host);
-	} else {
-		fprintf(stderr, "ttcp-r: buflen=%d, nbuf=%d, align=%d/%d, port=%s",
- 			buflen, nbuf, bufalign, bufoffset, port);
- 		if (sockbufsize)
-			fprintf(stderr, ", sockbufsize=%d", sockbufsize);
-		fprintf(stderr, "  %s\n", udp ? "udp" : "tcp");
-	}
+                hints.ai_family = AF_INET6;
+                maf = AF_INET6;
+                mreq6.ipv6mr_interface = 0;
 
-	if (!fd) {
-		if ((fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0)
-			err("socket");
-	}
+            } else {
+
+                /* IPv4 */
+                if (!IN_MULTICAST(ntohl(mreq.imr_multiaddr.s_addr))) {
+                    fprintf(stderr, "%s is not a multicast address\n", argv[optind]);
+                    exit(1);
+                }
+
+                hints.ai_family = AF_INET;
+                maf = AF_INET;
+                mreq.imr_interface.s_addr = INADDR_ANY;
+
+            }
+
+            host = argv[optind];
+            hints.ai_flags = AI_NUMERICHOST;
+
+        } else {
+
+            host = NULL;
+            hints.ai_flags = AI_PASSIVE;
+
+        }
+
+        if (getaddrinfo(host, port, &hints, &res0) != 0) {
+            fprintf(stderr, "can't resolve %s\n", port);
+            exit(1);
+        }
+
+        /* if libc supports ipv6 but kernel doesn't: get the first one */
+        /* XXX: uses ipv6 mapped addresses as generic methods aren't there yet */
+        for (res = res0; res; res = res->ai_next) {
+            if ((fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) > 0)
+                break;
+        }
+    }
+
+    if (udp && buflen < 5) {
+        buflen = 5;		/* send more than the sentinel size */
+    }
+
+    if ((buf = (char *)malloc(buflen+bufalign)) == (char *)NULL)
+        err("malloc");
 	
-	if (device) {
-		if (maf == AF_INET) {
-			/* Not supported, using struct ip_mreq we need to find IP
-			 * address of interface, at least linux has ip_mreqn which
-			 * uses interface index
-			 */
-		} else if (maf == AF_INET6) {
-			if ((mreq6.ipv6mr_interface = if_nametoindex(device)) == 0) {
-				err("unknown device");
-			}
-		} else {
-			struct ifreq ifr;
-			memset(&ifr, 0, sizeof(ifr));
-			strncpy(ifr.ifr_name, device, IFNAMSIZ-1);
-			ifr.ifr_name[IFNAMSIZ-1] = '\0';
+    if (bufalign != 0)
+        buf +=(bufalign - ((size_t)buf % bufalign) + bufoffset) % bufalign;
+
+    if (trans) {
+
+        fprintf(stderr, "ttcp-t: buflen=%d, nbuf=%d, align=%d/%d, port=%s", buflen, nbuf, bufalign, bufoffset, port);
+
+        if (sockbufsize)
+            fprintf(stderr, ", sockbufsize=%d", sockbufsize);
+
+        fprintf(stderr, "  %s  -> %s\n", udp ? "udp" : "tcp", host);
+
+    } else {
+
+        fprintf(stderr, "ttcp-r: buflen=%d, nbuf=%d, align=%d/%d, port=%s", buflen, nbuf, bufalign, bufoffset, port);
+
+        if (sockbufsize)
+            fprintf(stderr, ", sockbufsize=%d", sockbufsize);
+
+        fprintf(stderr, "  %s\n", udp ? "udp" : "tcp");
+    }
+
+    if (!fd) {
+        if ((fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0)
+            err("socket");
+    }
+	
+    if (device) {
+
+        if (maf == AF_INET) {
+            /* Not supported, using struct ip_mreq we need to find IP
+             * address of interface, at least linux has ip_mreqn which
+             * uses interface index
+             */
+        } else if (maf == AF_INET6) {
+
+            if ((mreq6.ipv6mr_interface = if_nametoindex(device)) == 0) {
+                err("unknown device");
+            }
+
+        } else {
+
+            struct ifreq ifr;
+            memset(&ifr, 0, sizeof(ifr));
+            strncpy(ifr.ifr_name, device, IFNAMSIZ-1);
+            ifr.ifr_name[IFNAMSIZ-1] = '\0';
+
 #ifdef SO_BINDTODEVICE
-			if (setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, &ifr,sizeof(ifr)) == -1) {
-				err("bind-to-device");
-			}
+            if (setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, &ifr,sizeof(ifr)) == -1) {
+                err("bind-to-device");
+            }
 #else
-			fprintf(stderr, "ttcp: warning: setting device not supported!\n");
+            fprintf(stderr, "ttcp: warning: setting device not supported!\n");
 #endif
-		}
-	}
-	mes("socket");
+        }
+    }
 
-	if (maf == AF_INET) {
-		if (trans) {
-			/* set hop limit, default 1. Should perhaps be an option */
-			int ttl=30;
-			setsockopt(fd, IPPROTO_IP, IP_MULTICAST_TTL, (char *)&ttl, sizeof(ttl));
-		} else {
-			/* join the group */
-			setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
-		}
-	} else if (maf == AF_INET6) {
-		if (trans) {
-			/* set hop limit, default 1. Should perhaps be an option */
-			int hops=30;
-			setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, (char *)&hops, sizeof(hops));
-		} else {
-			/* join the group */
-			setsockopt(fd, IPPROTO_IPV6, IPV6_JOIN_GROUP, &mreq6, sizeof(mreq6));
-		}
-	}
+    mes("socket");
 
-	if (!trans) {
+    if (maf == AF_INET) {
+
+        if (trans) {
+            /* set hop limit, default 1. Should perhaps be an option */
+            int ttl=30;
+            setsockopt(fd, IPPROTO_IP, IP_MULTICAST_TTL, (char *)&ttl, sizeof(ttl));
+        } else {
+            /* join the group */
+            setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
+        }
+
+    } else if (maf == AF_INET6) {
+
+        if (trans) {
+            /* set hop limit, default 1. Should perhaps be an option */
+            int hops=30;
+            setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, (char *)&hops, sizeof(hops));
+        } else {
+            /* join the group */
+            setsockopt(fd, IPPROTO_IPV6, IPV6_JOIN_GROUP, &mreq6, sizeof(mreq6));
+        }
+    }
+
+    if (!trans) {
 #ifdef SO_REUSEADDR		
-		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) == -1)
-			err("reuseaddr");
+        if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) == -1)
+            err("reuseaddr");
 #endif
-		if (bind(fd, (struct sockaddr *)res->ai_addr, res->ai_addrlen) < 0)
-			err("bind");
-	}
+
+        if (bind(fd, (struct sockaddr *)res->ai_addr, res->ai_addrlen) < 0)
+            err("bind");
+    }
 
 #if defined(SO_SNDBUF) || defined(SO_RCVBUF)
-	if (sockbufsize) {
-	    if (trans) {
-		if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sockbufsize,
-		    sizeof sockbufsize) < 0)
-			err("setsockopt: sndbuf");
-		mes("sndbuf");
-	    } else {
-		if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &sockbufsize,
-		    sizeof sockbufsize) < 0)
-			err("setsockopt: rcvbuf");
-		mes("rcvbuf");
-	    }
-	}
+    if (sockbufsize) {
+
+        if (trans) {
+
+            if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sockbufsize, sizeof sockbufsize) < 0)
+                err("setsockopt: sndbuf");
+
+            mes("sndbuf");
+
+        } else {
+
+            if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &sockbufsize, sizeof sockbufsize) < 0)
+                err("setsockopt: rcvbuf");
+
+            mes("rcvbuf");
+        }
+    }
 #endif
 
-	if (!udp)  {
-	    signal(SIGPIPE, sigpipe);
-	    if (trans) {
-		/* We are the client if transmitting */
-		if (options)  {
-			if (setsockopt(fd, SOL_SOCKET, options, &one, sizeof(one)) < 0)
-				err("setsockopt");
-		}
+    if (!udp)  {
+
+        signal(SIGPIPE, sigpipe);
+
+        if (trans) {
+            /* We are the client if transmitting */
+            if (options)  {
+                if (setsockopt(fd, SOL_SOCKET, options, &one, sizeof(one)) < 0)
+                    err("setsockopt");
+            }
+
 #ifdef TCP_NODELAY
-		if (nodelay) {
-			struct protoent *p;
-			p = getprotobyname("tcp");
-			if (p && setsockopt(fd, p->p_proto, TCP_NODELAY, 
-			    &one, sizeof(one)) < 0)
-				err("setsockopt: nodelay");
-			mes("nodelay");
-		}
-#endif
-		if (connect(fd, (struct sockaddr *)res->ai_addr, res->ai_addrlen) < 0)
-			err("connect");
-		mes("connect");
-	    } else {
-		/* otherwise, we are the server and 
-	         * should listen for the connections
-	         */
-		listen(fd, 0);   /* allow a queue of 0 */
-		if (options) {
-			if (setsockopt(fd, SOL_SOCKET, options, &one, sizeof(one)) < 0)
-				err("setsockopt");
-		}
-		fromlen = sizeof(frominet);
+            if (nodelay) {
 
-		if ((fd = accept(fd, (struct sockaddr*)&frominet, &fromlen)) < 0)
-			err("accept");
-		{ 
-		  struct sockaddr_storage peer;
-		  char addr_buf[NI_MAXHOST];
-		  socklen_t peerlen = sizeof(peer);
+                struct protoent *p;
+                p = getprotobyname("tcp");
+
+                if (p && setsockopt(fd, p->p_proto, TCP_NODELAY, &one, sizeof(one)) < 0)
+                    err("setsockopt: nodelay");
+
+                mes("nodelay");
+            }
+#endif
+
+            if (connect(fd, (struct sockaddr *)res->ai_addr, res->ai_addrlen) < 0)
+                err("connect");
+
+            mes("connect");
+        } else {
+            /* otherwise, we are the server and 
+	     * should listen for the connections
+	     */
+            listen(fd, 0);   /* allow a queue of 0 */
+
+            if (options) {
+                if (setsockopt(fd, SOL_SOCKET, options, &one, sizeof(one)) < 0)
+                    err("setsockopt");
+            }
+
+            fromlen = sizeof(frominet);
+
+            if ((fd = accept(fd, (struct sockaddr*)&frominet, &fromlen)) < 0)
+                err("accept");
+
+            {
+                struct sockaddr_storage peer;
+		char addr_buf[NI_MAXHOST];
+		socklen_t peerlen = sizeof(peer);
 		  
-		  if (getpeername(fd, (struct sockaddr*) &peer, &peerlen) < 0)
-			err("getpeername");
-		  if (getnameinfo((struct sockaddr *) &peer, res->ai_addrlen, addr_buf, 
-		  		sizeof(addr_buf), NULL, 0, NI_NUMERICHOST))
-		  	err("getnameinfo");
-		  fprintf(stderr,"ttcp-r: accept from %s\n", addr_buf);
-		}
-	    }
-	}
-	prep_timer();
-	errno = 0;
-	if (sinkmode) {      
-		register int cnt;
-		if (trans) {
-			pattern(buf, buflen);
-			if (udp)
-				(void)Nwrite(fd, buf, 4); /* rcvr start */
-			while (nbuf-- && Nwrite(fd, buf, buflen) == buflen)
-				nbytes += buflen;
-			if (udp)
-				(void)Nwrite(fd, buf, 4); /* rcvr end */
-		} else {
-			if (udp) {
-			    while ((cnt = Nread(fd, buf, buflen)) > 0)  {
-				    static int going = 0;
-				    if (cnt <= 4) {
-					    if (going)
-						    break;	/* "EOF" */
-					    going = 1;
-					    prep_timer();
-				    } else
-					    nbytes += cnt;
-			    }
-			} else {
-			    while ((cnt = Nread(fd, buf, buflen)) > 0)  {
-				    nbytes += cnt;
-			    }
-			}
-		}
-	} else {
-		register int cnt;
-		if (trans) {
-			while ((cnt = read(0, buf, buflen)) > 0 &&
-			    Nwrite(fd, buf, cnt) == cnt)
-				nbytes += cnt;
-		} else {
-			while ((cnt = Nread(fd, buf, buflen)) > 0 &&
-			    write(1, buf, cnt) == cnt)
-				nbytes += cnt;
-		}
-	}
-	if (errno)
-		err("IO");
-	(void)read_timer(stats, sizeof(stats));
-	if (udp && trans)  {
-		(void)Nwrite(fd, buf, 4); /* rcvr end */
-		(void)Nwrite(fd, buf, 4); /* rcvr end */
-		(void)Nwrite(fd, buf, 4); /* rcvr end */
-		(void)Nwrite(fd, buf, 4); /* rcvr end */
-	}
-	if (cput <= 0.0)
-		cput = 0.001;
-	if (realt <= 0.0)
-		realt = 0.001;
-	fprintf(stderr,
-		"ttcp%s: %.0f bytes in %.2f real seconds = %s/sec +++\n",
-		trans ? "-t" : "-r",
-		nbytes, realt, outfmt(nbytes/realt));
-	if (verbose) {
-	    fprintf(stderr,
-		"ttcp%s: %.0f bytes in %.2f CPU seconds = %s/cpu sec\n",
-		trans ? "-t" : "-r",
-		nbytes, cput, outfmt(nbytes/cput));
-	}
-	fprintf(stderr,
-		"ttcp%s: %ld I/O calls, msec/call = %.2f, calls/sec = %.2f\n",
-		trans ? "-t" : "-r",
-		numCalls,
-		1024.0 * realt/((double)numCalls),
-		((double)numCalls)/realt);
-	fprintf(stderr, "ttcp%s: %s\n", trans ? "-t" : "-r", stats);
-	if (verbose) {
-	    fprintf(stderr,
-		"ttcp%s: buffer address %p\n",
-		trans ? "-t" : "-r",
-		buf);
-	}
-	exit(0);
+                if (getpeername(fd, (struct sockaddr*) &peer, &peerlen) < 0)
+                    err("getpeername");
+
+                if (getnameinfo((struct sockaddr *) &peer, res->ai_addrlen, addr_buf, sizeof(addr_buf), NULL, 0, NI_NUMERICHOST))
+                    err("getnameinfo");
+
+                fprintf(stderr,"ttcp-r: accept from %s\n", addr_buf);
+            }
+        }
+    }
+
+    prep_timer();
+    errno = 0;
+
+    if (sinkmode) {      
+
+        register int cnt;
+
+        if (trans) {
+
+            pattern(buf, buflen);
+
+                if (udp)
+                    (void)Nwrite(fd, buf, 4); /* rcvr start */
+
+                while (nbuf-- && Nwrite(fd, buf, buflen) == buflen)
+                    nbytes += buflen;
+
+                if (udp)
+                    (void)Nwrite(fd, buf, 4); /* rcvr end */
+
+        } else {
+
+            if (udp) {
+
+                while ((cnt = Nread(fd, buf, buflen)) > 0)  {
+
+                    static int going = 0;
+
+                    if (cnt <= 4) {
+
+                        if (going)
+                            break;	/* "EOF" */
+
+                        going = 1;
+                        prep_timer();
+
+                    } else
+                        nbytes += cnt;
+                }
+
+            } else {
+
+                while ((cnt = Nread(fd, buf, buflen)) > 0)  {
+                    nbytes += cnt;
+                }
+            }
+        }
+
+    } else {
+
+        register int cnt;
+
+        if (trans) {
+
+            while ((cnt = read(0, buf, buflen)) > 0 && Nwrite(fd, buf, cnt) == cnt)
+                nbytes += cnt;
+
+        } else {
+
+            while ((cnt = Nread(fd, buf, buflen)) > 0 && write(1, buf, cnt) == cnt)
+                nbytes += cnt;
+
+        }
+    }
+
+    if (errno)
+        err("IO");
+
+    (void)read_timer(stats, sizeof(stats));
+
+    if (udp && trans)  {
+        (void)Nwrite(fd, buf, 4); /* rcvr end */
+        (void)Nwrite(fd, buf, 4); /* rcvr end */
+        (void)Nwrite(fd, buf, 4); /* rcvr end */
+        (void)Nwrite(fd, buf, 4); /* rcvr end */
+    }
+
+    if (cput <= 0.0)
+        cput = 0.001;
+
+    if (realt <= 0.0)
+        realt = 0.001;
+
+    fprintf(stderr, "ttcp%s: %.0f bytes in %.2f real seconds = %s/sec +++\n", trans ? "-t" : "-r", nbytes, realt, outfmt(nbytes/realt));
+
+    if (verbose) {
+        fprintf(stderr, "ttcp%s: %.0f bytes in %.2f CPU seconds = %s/cpu sec\n", trans ? "-t" : "-r", nbytes, cput, outfmt(nbytes/cput));
+    }
+
+    fprintf(stderr, "ttcp%s: %ld I/O calls, msec/call = %.2f, calls/sec = %.2f\n", trans ? "-t" : "-r", numCalls, 1024.0 * realt/((double)numCalls), ((double)numCalls)/realt);
+	
+    fprintf(stderr, "ttcp%s: %s\n", trans ? "-t" : "-r", stats);
+
+    if (verbose) {
+        fprintf(stderr, "ttcp%s: buffer address %p\n", trans ? "-t" : "-r", buf);
+    }
+
+    exit(0);
 
 usage:
-	fprintf(stderr, "%s", Usage);
-	exit(1);
+    fprintf(stderr, "%s", Usage);
+    exit(1);
 }
 
-void
-err(char *s)
+void err(char *s)
 {
-	fprintf(stderr, "ttcp%s: ", trans ? "-t" : "-r");
-	perror(s);
-	fprintf(stderr, "errno=%d\n", errno);
-	exit(1);
+    fprintf(stderr, "ttcp%s: ", trans ? "-t" : "-r");
+    perror(s);
+    fprintf(stderr, "errno=%d\n", errno);
+    exit(1);
 }
 
-void
-mes(char *s)
+void mes(char *s)
 {
-	fprintf(stderr, "ttcp%s: %s\n", trans ? "-t" : "-r", s);
+    fprintf(stderr, "ttcp%s: %s\n", trans ? "-t" : "-r", s);
 }
 
-void
-pattern(register char *cp, register int cnt)
+void pattern(register char *cp, register int cnt)
 {
-	register char c;
-	c = 0;
-	while (cnt-- > 0) {
-		while (!isprint((c&0x7F))) c++;
-		*cp++ = (c++&0x7F);
-	}
+    register char c;
+    c = 0;
+    while (cnt-- > 0) {
+        while (!isprint((c&0x7F))) c++;
+            *cp++ = (c++&0x7F);
+    }
 }
 
-char *
-outfmt(double b)
+char * outfmt(double b)
 {
     static char obuf[50];
     switch (fmt) {
-	case 'G':
+        case 'G':
 	    snprintf(obuf, sizeof(obuf), "%.2f GB", b / 1024.0 / 1024.0 / 1024.0);
 	    break;
 	default:
@@ -636,48 +697,48 @@ static void psecs();
 /*
  *			P R E P _ T I M E R
  */
-void
-prep_timer()
+void prep_timer()
 {
-	gettimeofday(&time0, (struct timezone *)0);
-	getrusage(RUSAGE_SELF, &ru0);
+    gettimeofday(&time0, (struct timezone *)0);
+    getrusage(RUSAGE_SELF, &ru0);
 }
 
 /*
  *			R E A D _ T I M E R
  * 
  */
-double
-read_timer(char *str, int len)
+double read_timer(char *str, int len)
 {
-	struct timeval timedol;
-	struct rusage ru1;
-	struct timeval td;
-	struct timeval tend, tstart;
-	char line[132];
+    struct timeval timedol;
+    struct rusage ru1;
+    struct timeval td;
+    struct timeval tend, tstart;
+    char line[132];
 
-	getrusage(RUSAGE_SELF, &ru1);
-	gettimeofday(&timedol, (struct timezone *)0);
-	prusage(&ru0, &ru1, &timedol, &time0, line);
-	/* XXX: buffer overflow if len > sizeof(line) */
-	(void)strncpy(str, line, len);
+    getrusage(RUSAGE_SELF, &ru1);
+    gettimeofday(&timedol, (struct timezone *)0);
+    prusage(&ru0, &ru1, &timedol, &time0, line);
 
-	/* Get real time */
-	tvsub(&td, &timedol, &time0);
-	realt = td.tv_sec + ((double)td.tv_usec) / 1000000;
+    /* XXX: buffer overflow if len > sizeof(line) */
+    (void)strncpy(str, line, len);
 
-	/* Get CPU time (user+sys) */
-	tvadd(&tend, &ru1.ru_utime, &ru1.ru_stime);
-	tvadd(&tstart, &ru0.ru_utime, &ru0.ru_stime);
-	tvsub(&td, &tend, &tstart);
-	cput = td.tv_sec + ((double)td.tv_usec) / 1000000;
-	if (cput < 0.00001)
-		cput = 0.00001;
-	return(cput);
+    /* Get real time */
+    tvsub(&td, &timedol, &time0);
+    realt = td.tv_sec + ((double)td.tv_usec) / 1000000;
+
+    /* Get CPU time (user+sys) */
+    tvadd(&tend, &ru1.ru_utime, &ru1.ru_stime);
+    tvadd(&tstart, &ru0.ru_utime, &ru0.ru_stime);
+    tvsub(&td, &tend, &tstart);
+    cput = td.tv_sec + ((double)td.tv_usec) / 1000000;
+
+    if (cput < 0.00001)
+        cput = 0.00001;
+
+    return(cput);
 }
 
-static void
-prusage(register struct rusage *r0, register struct rusage *r1,
+static void prusage(register struct rusage *r0, register struct rusage *r1,
 	struct timeval *e, struct timeval *b, char *outp)
 {
 	struct timeval tdiff;
