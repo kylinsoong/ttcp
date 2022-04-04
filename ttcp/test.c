@@ -18,6 +18,8 @@
 
 struct addrinfo hints;
 
+void test_addressinfo();
+
 
 int main(int argc, char **argv)
 {
@@ -32,5 +34,6 @@ void test_addressinfo()
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
+    printf("AF_INET: %d, SOCK_STREAM: %d\n", hints.ai_family, hints.ai_socktype);
 }
 

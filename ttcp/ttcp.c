@@ -111,6 +111,7 @@ int bufalign = 16*1024;		/* modulo this */
 int udp = 0;			/* 0 = tcp, !0 = udp */
 int options = 0;		/* socket options */
 int one = 1;                    /* for 4.3 BSD style setsockopt() */
+short sPort = 0;                /* TCP source port number */
 char *port = "5001";		/* TCP/UDP port number */
 char *host;			/* ptr to name of host */
 int trans;			/* 0=receive, !0=transmit mode */
@@ -152,6 +153,7 @@ Options specific to -t:\n\
 	-n ##	number of source bufs written to network (default 2048)\n\
 	-D	don't buffer TCP writes (sets TCP_NODELAY socket option)\n\
 	-w ##	number of microseconds to wait between each write\n\
+        -P ##   port number for client source port\n\
 Options specific to -r:\n\
 	-B	for -s, only output full blocks as specified by -l (for TAR)\n\
 	-T	\"touch\": access each byte as it's read\n\
@@ -179,119 +181,122 @@ sigpipe()
 {
 }
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
-	char *device = NULL;
-	int maf = 0;		/* Address family if multicast, else 0 */
-	int c;
+    char *device = NULL;
+    int maf = 0;		/* Address family if multicast, else 0 */
+    int c;
 
-	if (argc < 2) goto usage;
+    if (argc < 2) goto usage;
 
-	while ((c = getopt(argc, argv, "46drstuvBDTb:f:l:n:p:w:A:O:I:")) != -1) {
-		switch (c) {
-		case '4':
-			af = AF_INET;
-			break;
-		case '6':
-			af = AF_INET6;
-			break;
-		case 'I':
-			device = optarg;
-			break;
-		case 'B':
-			b_flag = 1;
-			break;
-		case 't':
-			trans = 1;
-			break;
-		case 'r':
-			trans = 0;
-			break;
-		case 'd':
-			options |= SO_DEBUG;
-			break;
-		case 'D':
+    while ((c = getopt(argc, argv, "46drstuvBDTb:f:l:n:p:w:P:A:O:I:")) != -1) {
+        switch (c) {
+        case '4':
+            af = AF_INET;
+            break;
+        case '6':
+            af = AF_INET6;
+            break;
+        case 'I':
+            device = optarg;
+            break;
+        case 'B':
+            b_flag = 1;
+            break;
+        case 't':
+            trans = 1;
+            break;
+        case 'r':
+            trans = 0;
+            break;
+        case 'd':
+            options |= SO_DEBUG;
+            break;
+        case 'D':
 #ifdef TCP_NODELAY
-			nodelay = 1;
+            nodelay = 1;
 #else
-			fprintf(stderr, "ttcp: -D option ignored: TCP_NODELAY socket option not supported\n");
+            fprintf(stderr, "ttcp: -D option ignored: TCP_NODELAY socket option not supported\n");
 #endif
-			break;
-		case 'n':
-			nbuf = atoi(optarg);
-			break;
-		case 'l':
-			buflen = atoi(optarg);
-			break;
-		case 's':
-			sinkmode = !sinkmode;
-			break;
-		case 'p':
-			port = optarg;
-			break;
-		case 'u':
-			udp = 1;
-			break;
-		case 'v':
-			verbose = 1;
-			break;
-		case 'w':
-			wait = strtol(optarg, (char **)NULL, 10);
-			break;
-		case 'A':
-			bufalign = atoi(optarg);
-			break;
-		case 'O':
-			bufoffset = atoi(optarg);
-			break;
-		case 'b':
+            break;
+        case 'n':
+            nbuf = atoi(optarg);
+            break;
+        case 'l':
+            buflen = atoi(optarg);
+            break;
+        case 's':
+            sinkmode = !sinkmode;
+            break;
+        case 'p':
+            port = optarg;
+            break;
+        case 'u':
+            udp = 1;
+            break;
+        case 'v':
+            verbose = 1;
+            break;
+        case 'w':
+            wait = strtol(optarg, (char **)NULL, 10);
+            break;
+        case 'P':
+            sPort = atoi(optarg);
+            break;
+        case 'A':
+            bufalign = atoi(optarg);
+            break;
+        case 'O':
+            bufoffset = atoi(optarg);
+            break;
+        case 'b':
 #if defined(SO_SNDBUF) || defined(SO_RCVBUF)
-			sockbufsize = atoi(optarg);
+            sockbufsize = atoi(optarg);
 #else
-			fprintf(stderr, "ttcp: -b option ignored: SO_SNDBUF/SO_RCVBUF socket options not supported\n");
+            fprintf(stderr, "ttcp: -b option ignored: SO_SNDBUF/SO_RCVBUF socket options not supported\n");
 #endif
-			break;
-		case 'f':
-			fmt = *optarg;
-			break;
-		case 'T':
-			touchdata = 1;
-			break;
-		default:
-			goto usage;
-		}
-	}
+            break;
+        case 'f':
+            fmt = *optarg;
+            break;
+        case 'T':
+            touchdata = 1;
+            break;
+        default:
+            goto usage;
+        }
+    }
 
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = af;
-	hints.ai_socktype = udp ? SOCK_DGRAM : SOCK_STREAM;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = af;
+    hints.ai_socktype = udp ? SOCK_DGRAM : SOCK_STREAM;
 
-	if (trans) {
-		/* xmitr */
-		if (optind == argc)
-			goto usage;
-		host = argv[optind];
-		if (getaddrinfo(host, port, &hints, &res) != 0) {	
-			fprintf(stderr, "can't resolve %s port %s\n", host, port);
-			exit(1);
-		}
+    if (trans) {
+        /* xmitr */
+        if (optind == argc)
+            goto usage;
 
-		if (udp) {
-			/* Check if multicast address */
-			if (res->ai_family == AF_INET6) {
-                               if (IN6_IS_ADDR_MULTICAST(&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr)) {
-                                       maf = AF_INET6;
-                               }
-			} else if (res->ai_family == AF_INET) {
-                               if (IN_MULTICAST(ntohl(((struct sockaddr_in *) res->ai_addr)->sin_addr.s_addr))) {
-                                       maf = AF_INET;
-                               }
-			}
-		}
-	} else {
-		/* rcvr */
-		if (udp && optind < argc) {
+        host = argv[optind];
+        if (getaddrinfo(host, port, &hints, &res) != 0) {	
+            fprintf(stderr, "can't resolve %s port %s\n", host, port);
+            exit(1);
+        }
+
+        if (udp) {
+            /* Check if multicast address */
+            if (res->ai_family == AF_INET6) {
+                if (IN6_IS_ADDR_MULTICAST(&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr)) {
+                    maf = AF_INET6;
+                }
+            } else if (res->ai_family == AF_INET) {
+                if (IN_MULTICAST(ntohl(((struct sockaddr_in *) res->ai_addr)->sin_addr.s_addr))) {
+                    maf = AF_INET;
+                }
+            }
+        }
+    } else {
+        /* rcvr */
+        if (udp && optind < argc) {
 			if (inet_pton(AF_INET, argv[optind], &mreq.imr_multiaddr) <= 0) {
                                if (inet_pton(AF_INET6, argv[optind], &mreq6.ipv6mr_multiaddr) <= 0) {
                                        fprintf(stderr, "%s is not a multicast address\n", argv[optind]);
