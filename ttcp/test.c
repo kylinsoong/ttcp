@@ -19,12 +19,15 @@
 struct addrinfo hints;
 
 void test_addressinfo();
+void test_char();
 
 
 int main(int argc, char **argv)
 {
     test_addressinfo();
 
+    test_char();
+    
     return 0;
 }
 
@@ -35,5 +38,18 @@ void test_addressinfo()
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     printf("AF_INET: %d, SOCK_STREAM: %d\n", hints.ai_family, hints.ai_socktype);
+}
+
+void test_char()
+{
+    char *sport = "";
+    if(strlen(sport) == 0) {
+        printf("YES %d\n", strlen(sport));
+    }
+
+    sport = "200";
+    if(strlen(sport) > 2) {
+        printf("YES %s\n", sport);
+    }
 }
 

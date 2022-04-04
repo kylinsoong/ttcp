@@ -111,7 +111,7 @@ int bufalign = 16*1024;		/* modulo this */
 int udp = 0;			/* 0 = tcp, !0 = udp */
 int options = 0;		/* socket options */
 int one = 1;                    /* for 4.3 BSD style setsockopt() */
-short sPort = 0;                /* TCP source port number */
+char *sport = "";               /* TCP/UDP port number for trans*/
 char *port = "5001";		/* TCP/UDP port number */
 char *host;			/* ptr to name of host */
 int trans;			/* 0=receive, !0=transmit mode */
@@ -241,7 +241,7 @@ int main(int argc, char **argv)
             wait = strtol(optarg, (char **)NULL, 10);
             break;
         case 'P':
-            sPort = atoi(optarg);
+            sport = optarg;
             break;
         case 'A':
             bufalign = atoi(optarg);
@@ -277,6 +277,7 @@ int main(int argc, char **argv)
             goto usage;
 
         host = argv[optind];
+
         if (getaddrinfo(host, port, &hints, &res) != 0) {	
             fprintf(stderr, "can't resolve %s port %s\n", host, port);
             exit(1);
@@ -448,6 +449,11 @@ int main(int argc, char **argv)
             err("reuseaddr");
 #endif
 
+        if (bind(fd, (struct sockaddr *)res->ai_addr, res->ai_addrlen) < 0)
+            err("bind");
+    }
+
+    if(strlen(sport) > 2) {
         if (bind(fd, (struct sockaddr *)res->ai_addr, res->ai_addrlen) < 0)
             err("bind");
     }

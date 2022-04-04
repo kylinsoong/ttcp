@@ -52,6 +52,10 @@ ttcp-t: 0.0user 0.0sys 0:01real 1% 0i+0d 362maxrss 0+2pf 122+0csw
 |Address already in use
 |bind() failed due to address already in use
 
+|99
+|Cannot assign requested address
+|bind() failed due to can not assign a port
+
 |111
 |Connection refused
 |connect() failed due to incorrect port
