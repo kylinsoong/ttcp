@@ -62,8 +62,8 @@
  *      include stdlib,h (define malloc, required for IA64)
  *      clean compile on Linux (IA64, i686), FreeBSD
  *
- * Modified Apr. 2022 by Kylin Soong <kylinsoong.1214@gmail.com>
- *     TODO      
+ * Modified Apr 2022 by Kylin Soong <kylinsoong.1214@gmail.com>
+ *     added -P option to make trans bind a port       
  *
  * Distribution Status -
  *      Public Domain.  Distribution Unlimited.
@@ -95,6 +95,7 @@ static char * useRCSid = ( RCSid + ( (char *)&useRCSid - (char *)&useRCSid ) );
 
 struct sockaddr_storage frominet;
 struct addrinfo hints, *res, *res0;
+struct addrinfo hintc, *rec;
 struct ipv6_mreq mreq6;
 struct ip_mreq mreq;
 
@@ -453,9 +454,28 @@ int main(int argc, char **argv)
             err("bind");
     }
 
-    if(strlen(sport) > 2) {
-        if (bind(fd, (struct sockaddr *)res->ai_addr, res->ai_addrlen) < 0)
+    /*
+     * #2 to make trans bind a port
+     *    added -P option to define a tcp port
+     *    the port should large than 1024(RFC 3232)
+     *    the port used by trans bind()
+     *
+     */
+    if(strlen(sport) > 3) {
+
+        memset(&hintc, 0, sizeof(hintc));
+        hintc.ai_family = af;
+        hintc.ai_socktype = udp ? SOCK_DGRAM : SOCK_STREAM;
+        hintc.ai_flags = AI_PASSIVE;
+
+        if (getaddrinfo(NULL, sport, &hintc, &rec) != 0) {
+            fprintf(stderr, "can't resolve %s\n", sport);
+            exit(1);
+        }
+
+        if (bind(fd, (struct sockaddr *)rec->ai_addr, rec->ai_addrlen) < 0)
             err("bind");
+
     }
 
 #if defined(SO_SNDBUF) || defined(SO_RCVBUF)
