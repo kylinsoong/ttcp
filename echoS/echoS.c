@@ -105,7 +105,6 @@ int main(int argc, char **argv)
     if (argc < 2) goto usage;
     
     pid_t              childpid;
-    void               sig_chld(int);
     int c;
 
     memset(&sinme, 0, sizeof(&sinme));
@@ -345,7 +344,8 @@ void out_sys(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    printf("%lu %d echoS: %s\n", time(0), getpid(), fmt);
+    time_t now = time(NULL);
+    printf("%ld %d echoS: %s\n", now, getpid(), fmt);
     va_end(ap);
 }
 
