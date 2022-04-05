@@ -576,14 +576,14 @@ int main(int argc, char **argv)
 
             pattern(buf, buflen);
 
-                if (udp)
-                    (void)Nwrite(fd, buf, 4); /* rcvr start */
+            if (udp)
+                (void)Nwrite(fd, buf, 4); /* rcvr start */
 
-                while (nbuf-- && Nwrite(fd, buf, buflen) == buflen)
-                    nbytes += buflen;
+            while (nbuf-- && Nwrite(fd, buf, buflen) == buflen)
+                nbytes += buflen;
 
-                if (udp)
-                    (void)Nwrite(fd, buf, 4); /* rcvr end */
+            if (udp)
+                (void)Nwrite(fd, buf, 4); /* rcvr end */
 
         } else {
 
