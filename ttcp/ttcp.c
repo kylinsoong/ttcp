@@ -177,6 +177,8 @@ void delay();
 int mread();
 char *outfmt();
 
+char *sock_ntop();
+
 void
 sigpipe()
 {
@@ -542,6 +544,10 @@ int main(int argc, char **argv)
             if ((fd = accept(fd, (struct sockaddr*)&frominet, &fromlen)) < 0)
                 err("accept");
 
+            char *addr_buf = sock_ntop(fd);
+            fprintf(stderr,"ttcp-r: accept from %s\n", addr_buf);
+
+            /* #3 peer source address contain port, add a sock_ntop() function to handle, apeend port
             {
                 struct sockaddr_storage peer;
 		char addr_buf[NI_MAXHOST];
@@ -554,7 +560,8 @@ int main(int argc, char **argv)
                     err("getnameinfo");
 
                 fprintf(stderr,"ttcp-r: accept from %s\n", addr_buf);
-            }
+            } 
+            */
         }
     }
 
@@ -660,6 +667,37 @@ int main(int argc, char **argv)
 usage:
     fprintf(stderr, "%s", Usage);
     exit(1);
+}
+
+char *sock_ntop(int connfd)
+{
+    char      str[128];
+    char      portstr[8];
+    
+    struct sockaddr_storage peer;
+    int peerlen = sizeof(peer);
+
+    if (getpeername(connfd, (struct sockaddr *) &peer, &peerlen) < 0) {
+        err("getpeername");
+    }
+
+    switch(peer.ss_family) {
+    case AF_INET:
+        inet_ntop(peer.ss_family, &((struct sockaddr_in *)&peer)->sin_addr, str, sizeof(str));
+        snprintf(portstr, sizeof(portstr), ":%d", ntohs(((struct sockaddr_in *)&peer)->sin_port));
+        break;
+    case AF_INET6:
+        inet_ntop(peer.ss_family, &((struct sockaddr_in6 *)&peer)->sin6_addr, str, sizeof(str));
+        snprintf(portstr, sizeof(portstr), ":%d", ntohs(((struct sockaddr_in6 *)&peer)->sin6_port));
+        break;
+    }
+
+    strcat(str, portstr);
+
+    char *result = malloc(strlen(str) +1);
+    strcpy(result, str);
+
+    return result;
 }
 
 void err(char *s)
