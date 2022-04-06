@@ -69,6 +69,50 @@ ttcp-t: 0.0user 0.0sys 0:01real 1% 0i+0d 362maxrss 0+2pf 122+0csw
 
 == Basic Process
 
+=== sequence number and acknowledgment number
+
+[cols="5a,5a"]
+|===
+|sequence number |acknowledgment number
+
+|
+
+* The number of the first data byte contained in that segment
+* A random number bewteen 0 and 2^32
+* Control segment(connection establishment, termination, or abortion) also has a sequence number, but no data packet
+* sequence number peered with acknowledgment number for Flow Control and Error Control
+
+|
+
+* The number of next byte that the receiver want to recive
+
+|===
+
+[source, bash]
+.*Start the ttcp receiver*
+----
+ttcp -r -4 -v -p 12301 
+----
+
+[source, bash]
+.*Start the ttcp transfer, sending 3 2 bytes sgement,*
+----
+# ttcp -t -v -4 -p 12301 -P 23401 10.1.20.203
+ttcp-t: buflen=8192, nbuf=2048, align=16384/0, port=12301  tcp  -> 10.1.20.203
+ttcp-t: socket
+ttcp-t: connect
+a
+b
+c
+----
+
+image:img/seq-ack.jpg[]
+
+* Control segment: seq number is `2715613001`, and the ack number from receiver is `2715613002`
+* 1st data segment: seq number is `1`, and the ack number from server is `3`
+* 2nd data segment: seq number is `3`, and the ack number from receiver is `5`
+* 3rd data segment: seq number is `5`, and the ack number from receiver is `7`
+
 === Three Times Handshake
 
 Each time client connect to server will process a 3 times handshake:
@@ -103,3 +147,4 @@ The client send 'exit' signal to server will simulate a *Active Close*, accordin
 17:33:23.542677 IP chat-client.42622 > chat-server.8878: Flags [F.], seq 81, ack 82, win 229, options [nop,nop,TS val 124954 ecr 695954], length 0
 17:33:23.542703 IP chat-server.8878 > chat-client.42622: Flags [.], ack 82, win 227, options [nop,nop,TS val 697955 ecr 124954], length 0
 ----
+
