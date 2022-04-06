@@ -41,7 +41,50 @@ ttcp-t: 0.0user 0.0sys 0:01real 1% 0i+0d 362maxrss 0+2pf 122+0csw
 
 === echoS
 
+[source, bash]
+.*Run as Server*
+----
+# echoS -s -p 12302 -4
+----
+
+[source, bash]
+.*Run as Client*
+----
+# echoS -c -p 12302 -P 23401 10.1.20.203
+1649260296 1962 echoS: socket
+1649260296 1962 echoS: bind
+1649260296 1962 echoS: connect
+time
+1649260300
+daytime
+Wed Apr  6 23:51:44 2022
+chargen
+u$a71i0Rkk*1LkQ46d2Dqtau4Pn1cU;tZ8G'#Xsn_};-&)\<
+----
+
 === chat
+
+[source, bash]
+.*Run as Server*
+----
+# chat -s -p 12303 -4
+chat-s: socket
+chat-s: bind
+chat-s: accept from 10.1.20.201
+10.1.20.201: hi
+chat-s: yes
+----
+
+[source, bash]
+.*Run as Client*
+----
+# chat -c -p 12303 -P 23401 10.1.20.203
+chat-c: socket
+chat-c: bind
+chat-c: connect
+chat-c: hi
+10.1.20.203: yes
+----
 
 == Err codes
 
