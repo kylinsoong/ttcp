@@ -38,6 +38,10 @@ Release:        x
 |Cannot assign requested address
 |bind() failed due to can not assign a port
 
+|104
+|Connection reset by peer
+|read or write IO err due to peer reset connection
+
 |111
 |Connection refused
 |connect() failed due to incorrect port
