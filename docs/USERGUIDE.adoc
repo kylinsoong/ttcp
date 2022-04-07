@@ -86,30 +86,6 @@ chat-c: hi
 10.1.20.203: yes
 ----
 
-== Err codes
-
-|===
-|errno |description |note
-
-|98
-|Address already in use
-|bind() failed due to address already in use
-
-|99
-|Cannot assign requested address
-|bind() failed due to can not assign a port
-
-|111
-|Connection refused
-|connect() failed due to incorrect port
-
-|113
-|No route to host
-|connect() failed due to incorrect host
-
-
-|===
-
 == Basic Process
 
 === sequence number and acknowledgment number
@@ -156,7 +132,48 @@ image:img/seq-ack.jpg[]
 * 2nd data segment: seq number is `3`, and the ack number from receiver is `5`
 * 3rd data segment: seq number is `5`, and the ack number from receiver is `7`
 
-=== Three Times Handshake
+Use the ttcp to send 5 continue segments, each with size of 1000 bytes.
+
+[source, bash]
+.*Start the ttcp receiver*
+----
+ttcp -r -4 -v -p 12301 -l 1000 -n 5 -s
+----
+
+[source, bash]
+.*Start the ttcp transfer*
+----
+ttcp -t -v -4 -p 12301 -P 23401 -l 1000 -n 5 -w 1000 -s 10.1.20.203
+----
+
+image:img/seq-ack-2seg.png[]
+
+|===
+|no |seq number |ack number
+
+|1
+|1
+|1001
+
+|2
+|1001
+|2001
+
+|3
+|2001
+|3001
+
+|4
+|3001
+|4001
+
+|5
+|4001
+|5001
+|===
+ 
+
+=== Three-Way Handshaking
 
 Each time client connect to server will process a 3 times handshake:
 
