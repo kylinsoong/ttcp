@@ -34,7 +34,6 @@
 
 #define ASCII_START 32
 #define ASCII_END   126
-#define LISTENQ     1024    /* 2nd argument to listen() */
 #define MAXLINE     4096    /* max text line length */
 #define BUFSIZE     1024
 
@@ -98,7 +97,7 @@ ssize_t  my_read(int fd, char *ptr);
 /* Core logic entries*/
 void     Str_echo(int, const char *);
 void     Str_cli(FILE *, int);
-
+void     Str_puts(int);
 
 int main(int argc, char **argv) 
 {
@@ -532,8 +531,11 @@ void Str_echo(int connfd, const char *peer)
             sprintf (sendBuff, "%lu\n" , now);
             write(connfd, sendBuff, strlen(sendBuff));
         } else if (strcmp(line, concat(STR_CHARGEN, STR_ENTER)) == 0) {
-            snprintf(sendBuff, sizeof(sendBuff), "%s\n", randstring(48));
-            write(connfd, sendBuff, strlen(sendBuff));
+            for(;;) {
+                snprintf(sendBuff, sizeof(sendBuff), "%s\n", randstring(999));
+                write(connfd, sendBuff, strlen(sendBuff));
+                sleep(1);
+            }
         } else{
             Writen(connfd, line, n);
         }
@@ -542,15 +544,28 @@ void Str_echo(int connfd, const char *peer)
 
 void Str_cli(FILE *fp, int sockfd)
 {
-    char sendline[MAXLINE], recvline[MAXLINE];
+    char sendline[MAXLINE];
 
     while (Fgets(sendline, MAXLINE, fp) != NULL) {
 
         Writen(sockfd, sendline, strlen(sendline));
 
-        if (Readline(sockfd, recvline, MAXLINE) == 0)
-            err_sys("server terminated prematurely");
+        if (strcmp(sendline, concat(STR_CHARGEN, STR_ENTER)) == 0) {
+            for(;;) {
+                Str_puts(sockfd);
+            }
+        }
 
-        Fputs(recvline, stdout);
+        Str_puts(sockfd);
     }
 }
+
+void Str_puts(int sockfd)
+{
+    char recvline[MAXLINE];
+
+    if (Readline(sockfd, recvline, MAXLINE) == 0)
+        err_sys("server terminated prematurely");
+    
+    Fputs(recvline, stdout);
+} 
