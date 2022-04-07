@@ -208,3 +208,54 @@ The client send 'exit' signal to server will simulate a *Active Close*, accordin
 17:33:23.542703 IP chat-server.8878 > chat-client.42622: Flags [.], ack 82, win 227, options [nop,nop,TS val 697955 ecr 124954], length 0
 ----
 
+== F5 BIG-IP fastl4 profie
+
+=== Reset on timeout
+
+If set the reset-on-timeout to enable, and specify a idle timeout,
+
+[source, bash]
+----
+reset-on-timeout enabled
+idle-timeout 300
+----
+
+the system sends a reset packet (RST) when a connection exceeds the idle timeout value.
+
+image:img/reset-idle-timeout.png[]
+
+=== MSS Overwrite
+
+If set mss-override enable and set a value,
+
+[source, bash]
+----
+mss-override 256
+----
+
+than the Proxy will overwrite MSS(Maximum segment size), the smaller mss, the lower traffic processing capibility. The following are comparision between default MSS, and 256 bytes mss(send 3 MB data):
+
+|===
+|options |default(1460) |overwrite(256)
+
+|Total Packets
+|274
+|849
+
+|TPS (KB/sec)
+|15678.19
+|4855.24
+
+|Time (seconds)
+|0.20
+|0.63
+
+|CPU Time (seconds)
+|0.04
+|0.09
+|===
+
+The MSS is specified as a TCP option initially as TCP SYN packet.
+
+image:img/mss-overwrite.png[]
+

@@ -30,6 +30,10 @@ Release:        x
 |===
 |errno |description |note
 
+|32
+|Broken pipe
+|Sock stream be broken
+
 |98
 |Address already in use
 |bind() failed due to address already in use
