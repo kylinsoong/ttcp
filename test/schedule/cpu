@@ -1,0 +1,6 @@
+cpu
+First In First Out (FIFO)
+Shortest Job First (SJF)
+Shortest Time-to-Completion First (STCF)
+Round Robin
+Multi-Level Feedback Queue (MLFQ)
