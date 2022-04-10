@@ -182,6 +182,8 @@ char *outfmt();
 char *sock_ntop();
 void receive();
 
+void sig_chld();
+
 void
 sigpipe()
 {
@@ -544,6 +546,9 @@ int main(int argc, char **argv)
 
             fromlen = sizeof(frominet);
 
+            if (signal(SIGCHLD, sig_chld) == SIG_ERR)
+                err("signal");
+
             for(;;) {
 
                 if ((connfd = accept(fd, (struct sockaddr*)&frominet, &fromlen)) < 0)
@@ -686,6 +691,20 @@ int main(int argc, char **argv)
 usage:
     fprintf(stderr, "%s", Usage);
     exit(1);
+}
+
+void sig_chld(int signo)
+{
+    pid_t   pid;
+    int     stat;
+
+    while ( (pid = waitpid(-1, &stat, WNOHANG)) > 0) {
+       char buf[30];
+       snprintf(buf, sizeof(buf), "child %d terminated", pid);
+       fprintf(stderr, "ttcp%s: child %d terminated\n", trans ? "-t" : "-r", pid);
+    }
+
+    return;
 }
 
 void receive(int connfd, const char *peer)
