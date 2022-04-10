@@ -735,20 +735,20 @@ void receive(int connfd, const char *peer)
     if (realt <= 0.0)
         realt = 0.001;
 
-    fprintf(stderr, "ttcp%s: stats of %s\n", trans ? "-t" : "-r", peer);
+    fprintf(stderr, "ttcp-r: worker %d, stats of %s\n", (int)getpid(), peer);
 
-    fprintf(stderr, "\t %.0f bytes in %.2f real seconds = %s/sec +++\n", nbytes, realt, outfmt(nbytes/realt));
+    fprintf(stderr, "\t%.0f bytes in %.2f real seconds = %s/sec +++\n", nbytes, realt, outfmt(nbytes/realt));
 
     if (verbose) {
-        fprintf(stderr, "\t %.0f bytes in %.2f CPU seconds = %s/cpu sec\n", nbytes, cput, outfmt(nbytes/cput));
+        fprintf(stderr, "\t%.0f bytes in %.2f CPU seconds = %s/cpu sec\n", nbytes, cput, outfmt(nbytes/cput));
     }
 
-    fprintf(stderr, "\t %ld I/O calls, msec/call = %.2f, calls/sec = %.2f\n", numCalls, 1024.0 * realt/((double)numCalls), ((double)numCalls)/realt);
+    fprintf(stderr, "\t%ld I/O calls, msec/call = %.2f, calls/sec = %.2f\n", numCalls, 1024.0 * realt/((double)numCalls), ((double)numCalls)/realt);
 
-    fprintf(stderr, "\t %s\n", stats);
+    fprintf(stderr, "\t%s\n", stats);
 
     if (verbose) {
-        fprintf(stderr, "\t buffer address %p\n", buf);
+        fprintf(stderr, "\tbuffer address %p\n", buf);
     }
 }
 
