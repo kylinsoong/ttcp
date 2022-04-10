@@ -64,6 +64,7 @@
  *
  * Modified Apr 2022 by Kylin Soong <kylinsoong.1214@gmail.com>
  *     added -P option to make trans bind a port       
+ *     recv multiple processes ability      
  *
  * Distribution Status -
  *      Public Domain.  Distribution Unlimited.
@@ -101,6 +102,7 @@ struct ip_mreq mreq;
 
 socklen_t fromlen;
 int fd;				/* fd of network socket */
+int connfd;			/* fd of accept network socket */
 
 int buflen = 8 * 1024;		/* length of buffer */
 char *buf;			/* ptr to dynamic buffer */
@@ -178,6 +180,7 @@ int mread();
 char *outfmt();
 
 char *sock_ntop();
+void receive();
 
 void
 sigpipe()
@@ -541,11 +544,27 @@ int main(int argc, char **argv)
 
             fromlen = sizeof(frominet);
 
-            if ((fd = accept(fd, (struct sockaddr*)&frominet, &fromlen)) < 0)
-                err("accept");
+            for(;;) {
 
-            char *addr_buf = sock_ntop(fd);
-            fprintf(stderr,"ttcp-r: accept from %s\n", addr_buf);
+                if ((connfd = accept(fd, (struct sockaddr*)&frominet, &fromlen)) < 0)
+                    err("accept");
+
+                char *addr_buf = sock_ntop(connfd);
+                fprintf(stderr,"ttcp-r: accept from %s\n", addr_buf);
+
+                if(fork() == 0) {
+                 
+                    if (close(fd) == -1)
+                        err("close");
+
+                    receive(connfd, addr_buf);
+
+                    exit(0);
+                }
+
+                if (close(connfd) == -1)
+                    err("close");
+            }
 
             /* #3 peer source address contain port, add a sock_ntop() function to handle, apeend port
             {
@@ -607,7 +626,7 @@ int main(int argc, char **argv)
 
             } else {
 
-                while ((cnt = Nread(fd, buf, buflen)) > 0)  {
+                while ((cnt = Nread(connfd, buf, buflen)) > 0)  {
                     nbytes += cnt;
                 }
             }
@@ -624,7 +643,7 @@ int main(int argc, char **argv)
 
         } else {
 
-            while ((cnt = Nread(fd, buf, buflen)) > 0 && write(1, buf, cnt) == cnt)
+            while ((cnt = Nread(connfd, buf, buflen)) > 0 && write(1, buf, cnt) == cnt)
                 nbytes += cnt;
 
         }
@@ -667,6 +686,47 @@ int main(int argc, char **argv)
 usage:
     fprintf(stderr, "%s", Usage);
     exit(1);
+}
+
+void receive(int connfd, const char *peer)
+{
+    prep_timer();
+    errno = 0;
+
+    register int cnt;
+
+    if (sinkmode) {
+        while ((cnt = Nread(connfd, buf, buflen)) > 0)  
+            nbytes += cnt;
+    } else {
+        while ((cnt = Nread(connfd, buf, buflen)) > 0 && write(1, buf, cnt) == cnt)
+            nbytes += cnt;       
+    }
+
+    if (errno)
+        err("IO");
+
+    (void)read_timer(stats, sizeof(stats));
+
+    if (cput <= 0.0)
+        cput = 0.001;
+
+    if (realt <= 0.0)
+        realt = 0.001;
+
+    fprintf(stderr, "ttcp%s: %.0f bytes in %.2f real seconds = %s/sec +++\n", trans ? "-t" : "-r", nbytes, realt, outfmt(nbytes/realt));
+
+    if (verbose) {
+        fprintf(stderr, "ttcp%s: %.0f bytes in %.2f CPU seconds = %s/cpu sec\n", trans ? "-t" : "-r", nbytes, cput, outfmt(nbytes/cput));
+    }
+
+    fprintf(stderr, "ttcp%s: %ld I/O calls, msec/call = %.2f, calls/sec = %.2f\n", trans ? "-t" : "-r", numCalls, 1024.0 * realt/((double)numCalls), ((double)numCalls)/realt);
+
+    fprintf(stderr, "ttcp%s: %s\n", trans ? "-t" : "-r", stats);
+
+    if (verbose) {
+        fprintf(stderr, "ttcp%s: buffer address %p\n", trans ? "-t" : "-r", buf);
+    }
 }
 
 char *sock_ntop(int connfd)
