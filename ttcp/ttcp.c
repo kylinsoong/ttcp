@@ -558,7 +558,9 @@ int main(int argc, char **argv)
                 fprintf(stderr,"ttcp-r: accept from %s\n", addr_buf);
 
                 if(fork() == 0) {
-                 
+        
+                    fprintf(stderr,"ttcp-r: worker %d start\n", (int)getpid());
+               
                     if (close(fd) == -1)
                         err("close");
 
@@ -700,8 +702,8 @@ void sig_chld(int signo)
 
     while ( (pid = waitpid(-1, &stat, WNOHANG)) > 0) {
        char buf[30];
-       snprintf(buf, sizeof(buf), "child %d terminated", pid);
-       fprintf(stderr, "ttcp%s: child %d terminated\n", trans ? "-t" : "-r", pid);
+       snprintf(buf, sizeof(buf), "worker %d terminated", pid);
+       fprintf(stderr, "ttcp%s: worker %d terminated\n", trans ? "-t" : "-r", pid);
     }
 
     return;
@@ -733,18 +735,20 @@ void receive(int connfd, const char *peer)
     if (realt <= 0.0)
         realt = 0.001;
 
-    fprintf(stderr, "ttcp%s: %.0f bytes in %.2f real seconds = %s/sec +++\n", trans ? "-t" : "-r", nbytes, realt, outfmt(nbytes/realt));
+    fprintf(stderr, "ttcp%s: stats of %s\n", trans ? "-t" : "-r", peer);
+
+    fprintf(stderr, "\t %.0f bytes in %.2f real seconds = %s/sec +++\n", nbytes, realt, outfmt(nbytes/realt));
 
     if (verbose) {
-        fprintf(stderr, "ttcp%s: %.0f bytes in %.2f CPU seconds = %s/cpu sec\n", trans ? "-t" : "-r", nbytes, cput, outfmt(nbytes/cput));
+        fprintf(stderr, "\t %.0f bytes in %.2f CPU seconds = %s/cpu sec\n", nbytes, cput, outfmt(nbytes/cput));
     }
 
-    fprintf(stderr, "ttcp%s: %ld I/O calls, msec/call = %.2f, calls/sec = %.2f\n", trans ? "-t" : "-r", numCalls, 1024.0 * realt/((double)numCalls), ((double)numCalls)/realt);
+    fprintf(stderr, "\t %ld I/O calls, msec/call = %.2f, calls/sec = %.2f\n", numCalls, 1024.0 * realt/((double)numCalls), ((double)numCalls)/realt);
 
-    fprintf(stderr, "ttcp%s: %s\n", trans ? "-t" : "-r", stats);
+    fprintf(stderr, "\t %s\n", stats);
 
     if (verbose) {
-        fprintf(stderr, "ttcp%s: buffer address %p\n", trans ? "-t" : "-r", buf);
+        fprintf(stderr, "\t buffer address %p\n", buf);
     }
 }
 
