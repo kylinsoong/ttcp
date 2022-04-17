@@ -86,7 +86,7 @@ chat-c: hi
 10.1.20.203: yes
 ----
 
-== Basic Process
+== TCP Stack
 
 === sequence number and acknowledgment number
 
@@ -207,6 +207,116 @@ The client send 'exit' signal to server will simulate a *Active Close*, accordin
 17:33:23.542677 IP chat-client.42622 > chat-server.8878: Flags [F.], seq 81, ack 82, win 229, options [nop,nop,TS val 124954 ecr 695954], length 0
 17:33:23.542703 IP chat-server.8878 > chat-client.42622: Flags [.], ack 82, win 227, options [nop,nop,TS val 697955 ecr 124954], length 0
 ----
+
+=== How TCP recv buffer size affect packet processing
+
+Send 10 MB size large message 50 times(total 500 MB in size), and record the time if taffic processed per seconds(TPS), run 3 times for each specific recv buffer size, and caculate the avarage TPS.
+
+[source, bash]
+----
+ttcp -r -4 -l 10485760 -n 50 -p 10000 -s -b 21845 -v
+ttcp -t -l 10485760 -n 50 -p 10000 -s  10.1.20.204
+----
+
+*  `-b` with recv side will set the recv buffer size
+*  `-l 10485760` - single message size, 10 MB
+*  `-n 50` - how many messages be sent, 50
+
+|===
+|SO_RCVBUF |KB/sec|KB/sec|KB/sec |AVG TPS(MB/sec)
+
+|87380
+|50773.00
+|49461.45
+|49192.62
+|50
+
+|43690
+|47195.15
+|46548.71
+|46734.77
+|47
+
+|21845
+|36026.04
+|35583.06
+|36256.20
+|36
+
+|10923
+|24055.33
+|23748.42
+|23106.25
+|24
+
+|5460
+|5144.34
+|5159.72
+|5148.27
+|5.2
+
+|2730
+|3836.44
+|-
+|-
+|3.8
+
+|1365
+|2390.78
+|-
+|-
+|2.4
+
+|===
+
+=== How TCP send buffer size affect packet processing
+
+Send 1 MB size large message 50 times(total 500 M in size), and record the time if taffic processed per seconds(TPS), run 3 times for each specific send buffer size, and caculate the avarage TPS.
+
+[source, bash]
+----
+ttcp -r -4 -l 10485760 -n 50 -p 10000 -s -v
+ttcp -t -l 1048576 -n 50 -p 10000 -s -b 16384 10.1.20.204
+----
+
+*  `-b` with recv side will set the recv buffer size
+*  `-l 10485760` - single message size, 10 MB
+*  `-n 50` - how many messages be sent, 50
+
+|===
+|SO_SNDBUF |KB/sec|KB/sec|KB/sec |AVG TPS(MB/sec)
+
+|32768
+|56403.51
+|57073.74
+|54878.68
+|56
+
+|16384
+|50773.00
+|49461.45
+|49192.62
+|50
+
+|12288
+|870.79
+|757.07
+|-
+|0.8
+
+|8192
+|870.54
+|606.97
+|871.09
+|0.8
+
+|===
+
+Conclusion fo snd/rcv buf to affect the tcp traffic:
+
+* The default snd/rcv buf size(16384/87380) have well performance
+* Decrease send buffer size affect tcp traffic significantly.
+
 
 == F5 BIG-IP fastl4 profie
 
