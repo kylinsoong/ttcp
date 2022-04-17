@@ -317,6 +317,54 @@ Conclusion fo snd/rcv buf to affect the tcp traffic:
 * The default snd/rcv buf size(16384/87380) have well performance
 * Decrease send buffer size affect tcp traffic significantly.
 
+=== MSS
+
+MSS(maximum segment size) is a parameter of the options field of the TCP header that specifies the largest amount of data. 
+
+----
+MSS = MTU - 20 -20
+----
+
+MTU is the size of the largest protocol data unit (PDU) that can be communicated in a single network layer transaction. TCP has regular 20 bytes headers, anf 20 bytes Options headers,
+
+[source, bash] 
+.*View default MTU*
+----
+# ifconfig ens33| grep mtu
+ens33: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+----
+
+[source, bash]
+.*Set MTP a value*
+----
+ifconfig ens33 mtu 1300
+----
+
+Traffic process per seconds:
+
+|===
+|MTU |MSS |KB/sec 
+
+|1500
+|1460
+|51520.98
+
+|1300
+|1260
+|3665.92 
+
+|1100
+|1060
+|976.42
+
+|900
+|860
+|712.74
+|===
+
+* Linux TCP stack optimize the traffic processing with default MTU 1500.
+
+
 
 == F5 BIG-IP fastl4 profie
 
