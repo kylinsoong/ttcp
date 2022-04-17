@@ -46,6 +46,10 @@ Release:        x
 |Connection reset by peer
 |read or write IO err due to peer reset connection
 
+|110
+|Connection timed out
+|firewall drop packet
+
 |111
 |Connection refused
 |connect() failed due to incorrect port

@@ -86,7 +86,82 @@ chat-c: hi
 10.1.20.203: yes
 ----
 
-== TCP Stack
+== Prerequisites
+
+=== Linux Networking
+
+image:img/linux-network.png[]
+
+== Three-Way Handshaking
+
+If a server_(eg, user space app on host `app-2`)_ request a *passive open*_(call sockets api tell TCP that it's ready to accept connection)_,
+
+[source, bash]
+----
+ttcp -r 
+----
+
+a client _(on host `app-1` request)_ a *active open*_(call sockets api tell TCP that it needs to be connected to that particular server)_
+
+[source, bash]
+----
+ttcp -t app-2
+----
+
+then TCP start Three-Way Handshaking:
+
+1. client send SYN to server
+2. server received client's SYN, send SYN + ACK to client
+3. client received server's SYN + ACK , send ACK to server
+
+image:img/tcp-3-times-handshake.png[]
+
+=== How many times SYN Retransmission?
+
+If set a policy on host `app-2` to DROP any packet if destination port is `5001`,
+
+[source, bash]
+----
+iptables -I INPUT -p tcp --dport 5001 -j DROP
+----
+
+then client try to connection to server, Three-Way Handshaking will blocked on SYN sending, and end with `110 Connection timed out` error after 6 times Retransmission.
+
+image:img/tcp-syn-retries.png[]
+
+There are 6 times retries that because Linux default tcp_syn_retries is 6,
+
+[source, bash]
+----
+# sysctl net.ipv4.tcp_syn_retries
+net.ipv4.tcp_syn_retries = 6
+----
+
+=== How many times SYN + ACK Retransmission?
+
+If set a policy on host `app-1` to DROP any packet if destination port is `20001`,
+
+[source, bash]
+----
+iptables -I INPUT -p tcp --dport 20001 -j DROP
+----
+
+while client connect to server append a `-P 20001`, to make SYN + ACK's destination port is 20001, and hint policy set above.
+
+[source, bash]
+----
+ttcp -t -P 20001 app-2
+----  
+
+The connection also end with `110 Connection timed out` error after 6 times Retransmission, but the differenc is the server also send the SYN + ACK Retransmission.
+
+image:img/tcp-syn-ack-retries.png[]
+
+
+
+
+
+== TCP 
 
 === sequence number and acknowledgment number
 
@@ -172,19 +247,6 @@ image:img/seq-ack-2seg.png[]
 |5001
 |===
  
-
-=== Three-Way Handshaking
-
-Each time client connect to server will process a 3 times handshake:
-
-image:img/3-times-handshake.jpg[]
-
-[source, bash]
-----
-17:30:55.883856 IP chat-client.42620 > chat-server.8878: Flags [S], seq 4044800396, win 29200, options [mss 1460,sackOK,TS val 4294944614 ecr 0,nop,wscale 7], length 0
-17:30:55.883882 IP chat-server.8878 > chat-client.42620: Flags [S.], seq 1228695765, ack 4044800397, win 28960, options [mss 1460,sackOK,TS val 550297 ecr 4294944614,nop,wscale 7], length 0
-17:30:55.884311 IP chat-client.42620 > chat-server.8878: Flags [.], ack 1, win 229, options [nop,nop,TS val 4294944615 ecr 550297], length 0
-----
 
 === Four Times Handshake
 
