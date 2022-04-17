@@ -376,8 +376,14 @@ int main(int argc, char **argv)
 
         fprintf(stderr, "ttcp-t: buflen=%d, nbuf=%d, align=%d/%d, port=%s", buflen, nbuf, bufalign, bufoffset, port);
 
-        if (sockbufsize)
-            fprintf(stderr, ", sockbufsize=%d", sockbufsize);
+        // #6 extract tcp send buffer size
+        if(!sockbufsize) {
+            unsigned int sndm = sizeof(sockbufsize);
+            int fdsocket = socket(AF_INET, SOCK_STREAM, 0);
+            getsockopt(fdsocket,SOL_SOCKET,SO_SNDBUF,(void *)&sockbufsize, &sndm);
+        }
+
+        fprintf(stderr, ", sockbufsize=%d", sockbufsize);
 
         fprintf(stderr, "  %s  -> %s\n", udp ? "udp" : "tcp", host);
 
@@ -385,8 +391,14 @@ int main(int argc, char **argv)
 
         fprintf(stderr, "ttcp-r: buflen=%d, nbuf=%d, align=%d/%d, port=%s", buflen, nbuf, bufalign, bufoffset, port);
 
-        if (sockbufsize)
-            fprintf(stderr, ", sockbufsize=%d", sockbufsize);
+        // #6 extract tcp recv buffer size
+        if(!sockbufsize) {
+            unsigned int rcvm = sizeof(sockbufsize);
+            int fdsocket = socket(AF_INET, SOCK_STREAM, 0);
+            getsockopt(fdsocket,SOL_SOCKET,SO_RCVBUF,(void *)&sockbufsize, &rcvm);
+        }
+
+        fprintf(stderr, ", sockbufsize=%d", sockbufsize);
 
         fprintf(stderr, "  %s\n", udp ? "udp" : "tcp");
     }
