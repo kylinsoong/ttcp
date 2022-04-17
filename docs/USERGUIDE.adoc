@@ -271,16 +271,16 @@ ttcp -t -l 10485760 -n 50 -p 10000 -s  10.1.20.204
 
 === How TCP send buffer size affect packet processing
 
-Send 1 MB size large message 50 times(total 500 M in size), and record the time if taffic processed per seconds(TPS), run 3 times for each specific send buffer size, and caculate the avarage TPS.
+Send 1 MB size large message 50 times(total 50 M in size), and record the time if taffic processed per seconds(TPS), run 3 times for each specific send buffer size, and caculate the avarage TPS.
 
 [source, bash]
 ----
-ttcp -r -4 -l 10485760 -n 50 -p 10000 -s -v
+ttcp -r -4 -l 1048576 -n 50 -p 10000 -s -v
 ttcp -t -l 1048576 -n 50 -p 10000 -s -b 16384 10.1.20.204
 ----
 
 *  `-b` with recv side will set the recv buffer size
-*  `-l 10485760` - single message size, 10 MB
+*  `-l 1048576` - single message size, 1 MB
 *  `-n 50` - how many messages be sent, 50
 
 |===
