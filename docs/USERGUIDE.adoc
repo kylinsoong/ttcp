@@ -129,9 +129,47 @@ then client try to connection to server, Three-Way Handshaking will blocked on S
 
 image:img/tcp-syn-retries.png[]
 
+If look into above diagram, there are 7 SYN packets, 6 SYN are Retransmission packet, if look into the timestamp of each packet:
+
+|===
+|SYN Times |Timestamp |Time Interval comapre last SYN Times(seconds) 
+
+|1
+|12:13:01.849323
+|
+
+|2
+|12:13:02.853415
+|1
+
+|3
+|12:13:04.860668
+|2
+
+|4
+|12:13:08.869242
+|4
+
+|5
+|12:13:16.900881
+|8
+
+|6
+|12:13:32.932824
+|16
+
+|7
+|12:14:04.996790
+|32
+
+|===
+
+Note that the time interval between 2 retransmissions are in *Exponential backoff*, this due the the spec definition.
+
 There are 6 times retries that because Linux default tcp_syn_retries is 6,
 
 [source, bash]
+.*net.ipv4.tcp_syn_retries*
 ----
 # sysctl net.ipv4.tcp_syn_retries
 net.ipv4.tcp_syn_retries = 6
@@ -157,8 +195,12 @@ The connection also end with `110 Connection timed out` error after 6 times Retr
 
 image:img/tcp-syn-ack-retries.png[]
 
-
-
+[source, bash]
+.*net.ipv4.tcp_synack_retries*
+----
+# sysctl net.ipv4.tcp_synack_retries
+net.ipv4.tcp_synack_retries = 5
+----
 
 
 == TCP 
@@ -387,7 +429,7 @@ MSS(maximum segment size) is a parameter of the options field of the TCP header 
 MSS = MTU - 20 -20
 ----
 
-MTU is the size of the largest protocol data unit (PDU) that can be communicated in a single network layer transaction. TCP has regular 20 bytes headers, anf 20 bytes Options headers,
+MTU is the size of the largest protocol data unit (PDU) that can be communicated in a single network layer transaction. TCP has regular 20 bytes headers, and IP always has 20 bytes headers,
 
 [source, bash] 
 .*View default MTU*
