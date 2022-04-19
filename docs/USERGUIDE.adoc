@@ -88,6 +88,36 @@ chat-c: hi
 
 == Prerequisites
 
+=== Lab Topologies
+
+As showing in figure, there are 4 hosts, `lb-1`, `lb-2`, `app-1`, `app-2`, as per host name suggestions, 2 hosts for proxy/loadbalancer, 2 hosts for apps. The hosts for proxy/loadbalancer has 2 NICs, ens33 for public access, and ens34 for NAT or internal route usage. `lb-1` and `lb-2` are in 10.1.10.0/24 network, all hosts are in 10.1.20.0/24 network.
+
+image:img/tcp-lab-topology.png[]
+
+|===
+|Host |NICs |IP |Usage
+
+|lb-1
+|ens33, ens34 
+|10.1.10.201, 10.1.20.201
+|LB
+
+|lb-2
+|ens33, ens34 
+|10.1.10.202, 10.1.20.202
+|LB
+
+|app-1
+|ens33
+|10.1.20.203
+|APP
+
+|app-2
+|ens33
+|10.1.20.204
+|APP
+|===
+
 === Linux Networking
 
 image:img/linux-network.png[]
@@ -263,7 +293,7 @@ image:img/tcp-synack-reset.png[]
 ** client port reused duo to retransmission.
 
 * Why *TCP Previous segment not captured*?
-* The Client not received `SYN + ACK`.  
+** The Client not received `SYN + ACK`.  
 
 
 
