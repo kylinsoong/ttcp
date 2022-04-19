@@ -195,6 +195,19 @@ The connection also end with `110 Connection timed out` error after 6 times Retr
 
 image:img/tcp-syn-ack-retries.png[]
 
+To investigate how many times SYN + ACK Retransmission, we need enlarge the SYN retries in client side via
+
+[source, bash]
+----
+sysctl -w net.ipv4.tcp_syn_retries=8
+----
+
+this will make sure the time interval between 7th retry and 8th retry are around 120 seconds, which has enough time to view SYN + ACK retransmission, the below diagram show 5 times retransmission.
+
+image:img/tcp-synack-retries.png[]
+
+Linux also has a `net.ipv4.tcp_synack_retries` to control synack retries, if look into the time interval between 2 retransmissions, it also comply with with the *Exponential backoff* rule.
+
 [source, bash]
 .*net.ipv4.tcp_synack_retries*
 ----
