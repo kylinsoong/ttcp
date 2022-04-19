@@ -52,7 +52,7 @@ Release:        x
 
 |111
 |Connection refused
-|connect() failed due to incorrect port
+|connect() failed due to incorrect port, or proxy/firewall rejection.
 
 |113
 |No route to host
