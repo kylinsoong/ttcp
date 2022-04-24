@@ -65,6 +65,7 @@
  * Modified Apr 2022 by Kylin Soong <kylinsoong.1214@gmail.com>
  *     added -P option to make trans bind a port       
  *     recv multiple processes ability      
+ *     add /etc/ttcp.conf for holding configuration
  *
  * Distribution Status -
  *      Public Domain.  Distribution Unlimited.
@@ -93,6 +94,8 @@ static char * useRCSid = ( RCSid + ( (char *)&useRCSid - (char *)&useRCSid ) );
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#define MAX_CONF_LINE 150
 
 struct sockaddr_storage frominet;
 struct addrinfo hints, *res, *res0;
@@ -130,6 +133,7 @@ char fmt = 'K';			/* output format: k = kilobits, K = kilobytes,
 int touchdata = 0;		/* access data after reading */
 static long wait = 0;		/* usecs to wait between each write */
 int af =  AF_UNSPEC;		/* Address family to be determined */
+char *device = NULL;
 
 extern int errno;
 extern int optind;
@@ -168,6 +172,9 @@ double nbytes;			/* bytes on net */
 unsigned long numCalls;		/* # of I/O system calls */
 double cput, realt;		/* user, real time (seconds) */
 
+FILE * fp;
+char bufr[MAX_CONF_LINE];
+
 void err();
 void mes();
 void pattern();
@@ -191,11 +198,76 @@ sigpipe()
 
 int main(int argc, char **argv)
 {
-    char *device = NULL;
     int maf = 0;		/* Address family if multicast, else 0 */
     int c;
 
     if (argc < 2) goto usage;
+
+    if((fp = fopen("/etc/ttcp.conf","r")) != NULL) {
+
+        while(fgets(bufr, MAX_CONF_LINE, fp) != NULL) {
+
+            if (strncmp("#", bufr, strlen("#")) == 0 || strlen(bufr) < 3) {
+                continue;
+            }
+
+            char *key = strtok(bufr, "=");
+            char *val = strtok(NULL, "=");
+            key = strtok(key, "\r\t\n ");
+            val = strtok(val, "\r\t\n ");
+
+            if(val ==  NULL) {
+                continue;
+            }
+
+            if (strcmp(key, "ip_version") == 0 && strlen(val) == 1 && val[0] == '4') {
+                af = AF_INET;
+            } else if (strcmp(key, "ip_version") == 0 && strlen(val) == 1 && val[0] == '6') {
+                af = AF_INET6;
+            } else if (strcmp(key, "buffer_length") == 0 && atoi(val) > 0) {
+                buflen = atoi(val);
+            } else if (strcmp(key, "protocol") == 0 && strcmp(val, "udp") == 0) {
+                udp = 1;
+            } else if (strcmp(key, "port") == 0 && atoi(val) > 1023 && atoi(val) < 65535) {
+                char result[5];
+                strcpy(result, val);
+                port = result;
+            } else if (strcmp(key, "silent") == 0 && strlen(val) == 1 && val[0] == '1') {
+                sinkmode = !sinkmode;
+            } else if (strcmp(key, "bufalign") == 0 && atoi(val) > 0) {
+                bufalign = atoi(val);
+            } else if (strcmp(key, "bufoffset") == 0 && atoi(val) > 0) {
+                bufoffset = atoi(val);
+            } else if (strcmp(key, "verbose") == 0 && strlen(val) == 1 && val[0] == '1') {
+                verbose = 1;
+            } else if (strcmp(key, "ttcp.sock.debug") == 0 && strlen(val) == 1 && val[0] == '1') {
+                options |= SO_DEBUG;
+            } else if (strcmp(key, "ttcp.sock.buf.size") == 0 && atoi(val) > 0) {
+                sockbufsize = atoi(val);
+            } else if (strcmp(key, "format") == 0 && strlen(val) == 1) {
+                fmt = val[0] ;
+            } else if (strcmp(key, "nbuf") == 0 && atoi(val) > 0) {
+                nbuf = atoi(val);
+            } else if (strcmp(key, "ttcp.tcp.nodelay") == 0 && strlen(val) == 1 && val[0] == '1') {
+                nodelay = 1;
+            } else if (strcmp(key, "write_interval") == 0 && strlen(val) > 0) {
+                wait = strtol(val, (char **)NULL, 10);
+            } else if (strcmp(key, "source_port") == 0 && atoi(val) > 1023 && atoi(val) < 65535) {
+                char result[5];
+                strcpy(result, val);
+                sport = result;
+            } else if (strcmp(key, "blocks_output") == 0 && strlen(val) == 1 && val[0] == '1') {
+                b_flag = 1;
+            } else if (strcmp(key, "touch") == 0 && strlen(val) == 1 && val[0] == '1') {
+                touchdata = 1;
+            } else if (strcmp(key, "device") == 0 && strlen(val) > 0) {
+                char result[12];
+                strcpy(result, val);
+                device = result;
+            }
+        }
+    }
+    
 
     while ((c = getopt(argc, argv, "46drstuvBDTb:f:l:n:p:w:P:A:O:I:")) != -1) {
         switch (c) {
@@ -480,7 +552,7 @@ int main(int argc, char **argv)
      *    the port used by trans bind()
      *
      */
-    if(strlen(sport) > 3) {
+    if(atoi(sport) > 1023 && atoi(sport) < 65535 && trans) {
 
         memset(&hintc, 0, sizeof(hintc));
         hintc.ai_family = af;
@@ -1133,3 +1205,4 @@ mread(int fd, register char *bufp, unsigned int n)
 
 	return((int)count);
 }
+
