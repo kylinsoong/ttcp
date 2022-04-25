@@ -19,6 +19,8 @@ cp -r echoS $NAME-$VERSION
 cp -r chat  $NAME-$VERSION 
 cp -r ttcp  $NAME-$VERSION 
 
+cp ttcp.conf $NAME-$VERSION
+
 cp Makefile $NAME-$VERSION
 
 tar -cf $NAME-$VERSION.tar.gz $NAME-$VERSION

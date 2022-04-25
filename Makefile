@@ -11,3 +11,5 @@ install:
 	install -m 0755 ttcp/ttcp $(DESTDIR)/usr/bin/ttcp
 	install -m 0755 chat/chat $(DESTDIR)/usr/bin/chat
 	install -m 0755 echoS/echoS $(DESTDIR)/usr/bin/echoS
+	mkdir -p $(DESTDIR)/etc
+	install -m 0755 ttcp.conf $(DESTDIR)/etc/ttcp.conf

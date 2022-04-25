@@ -1,7 +1,7 @@
-Name:           l4-client-server
-Version:        1.1
+Name:           ttcp
+Version:        1.12
 Release:        1
-Summary:        L4 client server service in C
+Summary:        Test TCP.
 
 License:        Apache 2.0
 Source0:        https://cloudadc.github.io/%{name}/releases/%{name}-%{version}.tar.gz
@@ -11,7 +11,7 @@ BuildRequires:  gcc
 BuildRequires:  make
 
 %description
-L4 client server service in C.
+Test TCP in C.
 
 %prep
 %setup -q
@@ -26,8 +26,12 @@ make %{?_smp_mflags}
 %{_bindir}/chat
 %{_bindir}/echoS
 %{_bindir}/ttcp
+/etc/ttcp.conf
 
 %changelog
+* Mon Apr 24 2022 Kylin Soong <kylinsoong.1214@gmail.com> - 1.12-1
+- use the sub project ttcp as release name
+- add ttcp.conf for holding global configs
 * Fri Apr 02 2022 Kylin Soong <kylinsoong.1214@gmail.com> - 1.1-1
 - Merge chat server and client to one file
 - Merge echo server and client to one file
