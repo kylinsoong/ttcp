@@ -130,6 +130,12 @@ int sockbufsize = 0;		/* socket buffer size to use */
 char fmt = 'K';			/* output format: k = kilobits, K = kilobytes,
 				 *  m = megabits, M = megabytes, 
 				 *  g = gigabits, G = gigabytes */
+
+int keepalive = 0;
+int tcp_keepalive_time = 7200;
+int tcp_keepalive_intvl = 75;
+int tcp_keepalive_probes = 9;
+
 int touchdata = 0;		/* access data after reading */
 static long wait = 0;		/* usecs to wait between each write */
 int af =  AF_UNSPEC;		/* Address family to be determined */
@@ -264,6 +270,14 @@ int main(int argc, char **argv)
                 char result[12];
                 strcpy(result, val);
                 device = result;
+            } else if (strcmp(key, "ttcp.sock.keepalive") == 0 && atoi(val) == 1) {
+                keepalive = 1;
+            } else if (strcmp(key, "ttcp.tcp.tcp_keepalive_time") == 0 && atoi(val) > 0) {
+                tcp_keepalive_time = atoi(val);
+            } else if (strcmp(key, "ttcp.tcp.tcp_keepalive_intvl") == 0 && atoi(val) > 0) {
+                tcp_keepalive_intvl = atoi(val);
+            } else if (strcmp(key, "ttcp.tcp.tcp_keepalive_probes") == 0 && atoi(val) > 0) {
+                tcp_keepalive_probes = atoi(val);
             }
         }
     }
@@ -574,20 +588,36 @@ int main(int argc, char **argv)
 
         if (trans) {
 
-            if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sockbufsize, sizeof sockbufsize) < 0)
+            if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sockbufsize, sizeof(sockbufsize)) < 0)
                 err("setsockopt: sndbuf");
 
             mes("sndbuf");
 
         } else {
 
-            if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &sockbufsize, sizeof sockbufsize) < 0)
+            if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &sockbufsize, sizeof(sockbufsize)) < 0)
                 err("setsockopt: rcvbuf");
 
             mes("rcvbuf");
         }
     }
 #endif
+
+    if(keepalive) {
+        if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive)) < 0) 
+            err("setsockopt: keepalive");
+
+        if(setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &tcp_keepalive_time, sizeof(int)) < 0)
+            err("setsockopt: keepidle");
+
+        if(setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &tcp_keepalive_intvl, sizeof(int)) < 0)
+            err("setsockopt: keepintvl");
+
+        if(setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &tcp_keepalive_probes, sizeof(int)) < 0)
+            err("setsockopt: keepcnt");
+
+        mes("keepalive");
+    }
 
     if (!udp)  {
 
