@@ -129,6 +129,8 @@ int b_flag = 0;			/* use mread() */
 int sockbufsize = 0;		/* socket buffer size to use */
 int socksndbufsize = 0;
 int sockrcvbufsize = 0;
+int socksndtimeout = 0;
+int sockrcvtimeout = 0;
 char fmt = 'K';			/* output format: k = kilobits, K = kilobytes,
 				 *  m = megabits, M = megabytes, 
 				 *  g = gigabits, G = gigabytes */
@@ -254,6 +256,10 @@ int main(int argc, char **argv)
                 socksndbufsize = atoi(val);
             } else if (strcmp(key, "ttcp.sock.rcvbuf.size") == 0 && atoi(val) > 0) {
                 sockrcvbufsize = atoi(val);
+            } else if (strcmp(key, "ttcp.sock.snd.timeout") == 0 && atoi(val) > 0 && atoi(val) < 32767 ) {
+                socksndtimeout = atoi(val);
+            } else if (strcmp(key, "ttcp.sock.rcv.timeout") == 0 && atoi(val) > 0 && atoi(val) < 32767 ) {
+                 sockrcvtimeout = atoi(val);
             } else if (strcmp(key, "format") == 0 && strlen(val) == 1) {
                 fmt = val[0] ;
             } else if (strcmp(key, "nbuf") == 0 && atoi(val) > 0) {
@@ -619,6 +625,22 @@ int main(int argc, char **argv)
             err("setsockopt: keepcnt");
 
         mes("keepalive");
+    }
+
+    if(socksndtimeout && trans) {
+        struct timeval tv;
+        tv.tv_sec = socksndtimeout;
+        if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, (struct timeval *)&tv,sizeof(struct timeval)) < 0)
+            err("setsockopt: send timeout");
+        mes("timout");
+    }
+
+    if(sockrcvtimeout && !trans) {
+        struct timeval tv;
+        tv.tv_sec = sockrcvtimeout;
+        if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (struct timeval *)&tv,sizeof(struct timeval)) < 0)
+            err("setsockopt: recv timeout");
+        mes("timout");
     }
 
     if (!udp)  {
