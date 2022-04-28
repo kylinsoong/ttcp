@@ -14,7 +14,7 @@ yum install -y rpmdevtools rpmlint
 Update the `Version` and `Release` as a larger version, update the `Name` if you want to change the rpm name.
 
 ----
-Name:           l4-client-server
+Name:           ttcp
 Version:        x.x
 Release:        x
 ----
@@ -24,6 +24,25 @@ Release:        x
 ----
 ./release.sh
 ----
+
+The above steps execute success will genertate *ttcp-x.x-x.$ARCH.rpm* under `~/rpmbuild/RPMS/$ARCH` folder.
+
+== How to create a docker image?
+
+[source, bash]
+.*1. Install the docker*
+----
+# docker -v
+Docker version 20.10.14, build a224086
+----
+
+[source, bash]
+.*2. Make sure rpm could build as expected, run 'build.sh'*
+----
+./build.sh
+----
+
+The above steps execute success will build docker images *cloudadc/ttcp:x.x-x*.
 
 == Linux Sock Err codes
 

@@ -1,0 +1,23 @@
+# Base image
+FROM centos:7.9.2009
+
+# Set Label
+LABEL maintainer "kylinsoong.1214@gmail.com"
+
+# Set the working directory to /app
+WORKDIR /ttcp
+
+# set build arg
+ARG TTCP_NAME
+ARG TTCP_VERSION
+ARG TTCP_PLATFORM
+
+# Copy rpm to working directory(run 'release.sh' to build rpm prior this steps)
+ADD target/$TTCP_NAME-$TTCP_VERSION.$TTCP_PLATFORM.rpm /ttcp
+
+# Compile the binaries
+RUN yum -y localinstall $TTCP_NAME-$TTCP_VERSION.$TTCP_PLATFORM.rpm
+
+EXPOSE 5001
+
+CMD ["ttcp", "-r"] 
