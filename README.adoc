@@ -32,6 +32,8 @@ Refer to link:docs/USERGUIDE.adoc[User Guide] for usage reference, and link:docs
 
 image:/docs/img/k8s-native-net-performance.png[]
 
+link:docs/k8s-native-net-performance.csv[origin test statistics.]
+
 * Pods on same hosts have more than *1.6 times* TPS of pods across hosts in East-West traffic transmit.
 * Pods on same hosts can approach *half of NIC* throughput in East-West traffic transmit.
 * Pods on same hosts are *faster than* host to host East-West traffic transmit.
