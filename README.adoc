@@ -1,12 +1,45 @@
-= What's this
+= TTCP
 
-A group of L4(TCP/UDP) client server app, that used to Deep Dive into L4 protocol, or performance benchmark.
+TTCP(Test TCP) is an utility to measure TCP throughput through an IP path, test tcp connection, transfers fabricated buffers or data copied from stdin.
+
+To use TTCP, start the receiver on one side of the path, then start the transmitter on the other side. The transmitting side sends a specified number of TCP packets to the receiving side. At the end of the test, the two sides display the number of bytes transmitted and the time elapsed for the packets to pass from one end to the other.
+
+[source, bash]
+.*Install TTCP*
+----
+rpm -ivh ttcp-1.12-1.x86_64.rpm
+----
+
+Either edit the options in `/etc/ttcp.conf` prior to TTCP starting, or pass options as arguments while TTCP starting
+
+[source, bash]
+.*Run TTCP*
+----
+ttcp -t [-options] host [ < in ]
+ttcp -r [-options] [multicast-group][ > out]
+----
+
+TTCP also contains other L4(TCP/UDP) client server app, 
 
 * chat  - chat messages from stdin and socket strams. 
 * echoS - display a line of text over socket stream.
-* ttcp  - test tcp connection, transfers fabricated buffers or data copied from stdin
 
 Refer to link:docs/USERGUIDE.adoc[User Guide] for usage reference, and link:docs/DEVGUIDE.adoc[Developer Guide] for development reference.
+
+== TTCP for K8S performance benchmark
+
+=== Native Networking Performance
+
+image:/docs/img/k8s-native-net-performance.png[]
+
+* Pods on same hosts have more than *1.6 times* TPS of pods across hosts in East-West traffic transmit.
+* Pods on same hosts can approach *half of NIC* throughput in East-West traffic transmit.
+* Pods on same hosts are *faster than* host to host East-West traffic transmit.
+* *Hostnetwork* are the *fastest* way for North-South traffic transmit.
+* *Hostnetwork* has the same performance as host to host, can approach *half of NIC* in North-South traffic transmit.
+* *NodePort node local* mode have around *1.6 times* TPS of *NodePort node on cluster* mode North-South traffic transmit.
+* *HostPort* has same performance as *NodePort node local* in North-South traffic transmit. 
+* *NodePort node on cluster* North-South has worst performance, than *ClusterIP pod across hosts* East-West. 
 
 == How to Contribute
 

@@ -6,7 +6,7 @@
 Install on Red Hat Linux via:
 
 ----
-rpm -ivh l4-client-server-1.1-1.x86_64.rpm
+rpm -ivh ttcp-1.12-1.x86_64.rpm 
 ----
 
 == Run
