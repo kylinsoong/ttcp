@@ -118,7 +118,13 @@ image:img/tcp-lab-topology.png[]
 |APP
 |===
 
-=== Linux Networking
+=== Linux Kernel Networking Stack 
+
+There are seven logical networking layers according to the Open Systems Interconnection (OSI) model. The lowest layer is the physical layer, which is the hardware, and the highest layer is the application layer, where userspace software processes are running.
+
+Linux Kernel Networking stack handles 3 layers, the L2, L3 and L4, correspond to the data link layer, the network layer, and the transport layer in the seven-layer model. The essence of the Linux kernel stack is passing incoming packets from L2 (the network device drivers) to L3 (the network layer, usually IPv4 or IPv6) and then to L4 (the transport layer, where you have, for example, TCP or UDP listening sockets) if they are for local delivery, or back to L2 for transmission when the packets should be forwarded. Outgoing packets that were locally generated are passed from L4 to L3 and then to L2 for actual transmission by the network device driver. 
+
+The kernel does not handle any layer above L4; those layers (the session, presentation, and application layers) are handled solely by userspace applications. The physical layer (L1) is also not handled by the Linux kernel.
 
 image:img/linux-network.png[]
 
