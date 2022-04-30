@@ -94,30 +94,6 @@ As showing in figure, there are 4 hosts, `lb-1`, `lb-2`, `app-1`, `app-2`, as pe
 
 image:img/tcp-lab-topology.png[]
 
-|===
-|Host |NICs |IP |Usage
-
-|lb-1
-|ens33, ens34 
-|10.1.10.201, 10.1.20.201
-|LB
-
-|lb-2
-|ens33, ens34 
-|10.1.10.202, 10.1.20.202
-|LB
-
-|app-1
-|ens33
-|10.1.20.203
-|APP
-
-|app-2
-|ens33
-|10.1.20.204
-|APP
-|===
-
 === Linux Kernel Networking Stack 
 
 There are seven logical networking layers according to the Open Systems Interconnection (OSI) model. The lowest layer is the physical layer, which is the hardware, and the highest layer is the application layer, where userspace software processes are running. These seven layers are:
