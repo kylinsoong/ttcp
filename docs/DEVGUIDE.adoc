@@ -79,3 +79,31 @@ The above steps execute success will build docker images *cloudadc/ttcp:x.x-x*.
 
 
 |===
+
+== Socket Options
+
+`test/sock/checkops.c` is a test fucntion to list all available socket options, the following are options set in linux:
+
+[source, bash]
+----
+O_BROADCAST: default = off
+SO_DEBUG: default = off
+SO_DONTROUTE: default = off
+SO_ERROR: default = 0
+SO_KEEPALIVE: default = off
+SO_LINGER: default = l_onoff = 0, l_linger = 0
+SO_OOBINLINE: default = off
+SO_RCVBUF: default = 87380
+SO_SNDBUF: default = 16384
+SO_RCVLOWAT: default = 1
+SO_SNDLOWAT: default = 1
+SO_RCVTIMEO: default = 0 sec, 0 usec
+SO_SNDTIMEO: default = 0 sec, 0 usec
+SO_REUSEADDR: default = off
+SO_REUSEPORT: default = off
+SO_TYPE: default = 1
+IP_TOS: default = 0
+IP_TTL: default = 64
+TCP_MAXSEG: default = 536
+TCP_NODELAY: default = off
+----
