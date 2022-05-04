@@ -204,7 +204,7 @@ If set a policy on host `app-1` to DROP any packet if destination port is `20001
 iptables -I INPUT -p tcp --dport 20001 -j DROP
 ----
 
-while client connect to server append a `-P 20001`, to make SYN + ACK's destination port is 20001, and hint policy set above.
+while trans connect to recv append a `-P 20001`, to make SYN + ACK's destination port is 20001, and hint policy set above.
 
 [source, bash]
 ----
@@ -215,14 +215,68 @@ The connection also end with `110 Connection timed out` error after 6 times Retr
 
 image:img/tcp-syn-ack-retries.png[]
 
-To investigate how many times SYN + ACK Retransmission, we need enlarge the SYN retries in client side via
+To further investigate what caused the `110 Connection timed out` error, use the `tcp.flags.syn == 1 and tcp.flags.ack == 0` to filter only *SYN* packet:
+
+|===
+|No |SYN Times |Timestamp |Time Interval comapre last SYN Times(seconds)
+
+|1
+|1
+|23:49:02.592
+|
+
+|4
+|2
+|23:49:03.595
+|1
+
+|6
+|3
+|23:49:05.599
+|2
+
+|9
+|4
+|23:49:09.603
+|4
+
+|12
+|5
+|23:49:17.619
+|8
+
+|15
+|6
+|23:49:33.619
+|16
+
+|18
+|7
+|23:50:05.731
+|32
+
+|===   
+
+It's obvious that the `net.ipv4.tcp_syn_retries = 6` seeting on host `app-1` matters, `110 Connection timed out` error generated after 6 times of SYN Retransmission, *Exponential backoff* formular also be applied, the Time Interval comapre last SYN Times are 1, 2, 4, 8, 16, 32.
+
+image:img/tcp-retransmission-expon.png[]  
+
+The linux network stack also has a `net.ipv4.tcp_synack_retries` kernel parameter, the default value is 5, which means there should be 5 times SYN + ACK Retransmission in 31 seconds.
 
 [source, bash]
 ----
-sysctl -w net.ipv4.tcp_syn_retries=8
+# sysctl net.ipv4.tcp_synack_retries
+net.ipv4.tcp_synack_retries = 5
 ----
 
-this will make sure the time interval between 7th retry and 8th retry are around 120 seconds, which has enough time to view SYN + ACK retransmission, the below diagram show 5 times retransmission.
+Cause the SYN Retransmission will trigger SYN + ACK Retransmission time reset, so to investigate how many times SYN + ACK Retransmission, we need enlarge the SYN retries in trans side via
+
+[source, bash]
+----
+sysctl -w net.ipv4.tcp_syn_retries=9
+----
+
+this will make the time interval between 6th retry and 7th retry are 32 seconds, the time interval between 7th retry and 8th retry are 62 seconds, which has enough time to view SYN + ACK retransmission, the below diagram show 5 times retransmission:
 
 image:img/tcp-synack-retries.png[]
 
@@ -289,7 +343,7 @@ image:img/tcp-synack-reset.png[]
 
  
 
-== TCP 
+== Data Transfer 
 
 === sequence number and acknowledgment number
 
@@ -374,29 +428,6 @@ image:img/seq-ack-2seg.png[]
 |4001
 |5001
 |===
- 
-
-=== Four Times Handshake
-
-The client send 'exit' signal to server will simulate a *Active Close*, accordingly the server send 'exit' signal to client will simulate a *Passive Close*.
-
-[source, bash]
-.*Active Close*
-----
-17:31:31.908950 IP chat-client.42620 > chat-server.8878: Flags [F.], seq 81, ack 1, win 229, options [nop,nop,TS val 13331 ecr 584320], length 0
-17:31:31.949050 IP chat-server.8878 > chat-client.42620: Flags [.], ack 82, win 227, options [nop,nop,TS val 586362 ecr 13331], length 0
-17:31:33.909179 IP chat-server.8878 > chat-client.42620: Flags [F.], seq 1, ack 82, win 227, options [nop,nop,TS val 588322 ecr 13331], length 0
-17:31:33.910129 IP chat-client.42620 > chat-server.8878: Flags [.], ack 2, win 229, options [nop,nop,TS val 15332 ecr 588322], length 0
-----
-
-[source, bash]
-.*Passive Close*
-----
-17:33:21.541507 IP chat-server.8878 > chat-client.42622: Flags [F.], seq 81, ack 81, win 227, options [nop,nop,TS val 695954 ecr 120954], length 0
-17:33:21.582513 IP chat-client.42622 > chat-server.8878: Flags [.], ack 82, win 229, options [nop,nop,TS val 122995 ecr 695954], length 0
-17:33:23.542677 IP chat-client.42622 > chat-server.8878: Flags [F.], seq 81, ack 82, win 229, options [nop,nop,TS val 124954 ecr 695954], length 0
-17:33:23.542703 IP chat-server.8878 > chat-client.42622: Flags [.], ack 82, win 227, options [nop,nop,TS val 697955 ecr 124954], length 0
-----
 
 === How TCP recv buffer size affect packet processing
 
@@ -584,8 +615,63 @@ While sending above data over ttcp, it will get the max send segment.
 
 image:img/tcp-max-send-segment.png[]
 
+=== How timestamps affect the mss size?
 
+There can be up to 40 bytes optional information in TCP Header, the TCP Timestamps options usually inserted as 3rd option in 8 bytes long, if TCP Timestamps is enabled, the 1st and 2nd option will set a NoP(No-Operation) options, each NoP option will take 2 bytes, so enable TCP Timestamps will take additional 12 bytes(2 + 2 + 8), this will make TCP headers as 32 bytes.
 
+Run ttcp recv on host `app-2`, run ttcp trans on host `app-1`, specify to send only 1 message:
+
+[source, bash]
+----
+ttcp -r
+----
+
+[source, bash]
+----
+ttcp -t 10.1.20.204
+----
+
+Note that, the above data transfer has TCP Timestamps enabled, use `tcpdump` capture a data transfer pcap.
+
+Execute the below command on hosts that run ttcp:
+
+[source, bash]
+----
+~]# sysctl -w net.ipv4.tcp_timestamps=0
+net.ipv4.tcp_timestamps = 0
+----
+
+Then run ttcp recv on host `app-2`, ttcp trans on host `app-1`, specify to send only 1 message, this time will make data transfer has TCP Timestamps disabled, use `tcpdump` capture a data transfer pcap.
+
+image:img/tcp_timestamps.png[]
+
+Turn timestamps off to reduce performance spikes related to timestamp generation. The sysctl command controls the values of TCP related entries, setting the timestamps kernel parameter found at `/proc/sys/net/ipv4/tcp_timestamps`.
+
+Turn timestamps off with the following command:
+
+[source, bash]
+----
+~]# sysctl -w net.ipv4.tcp_timestamps=0
+net.ipv4.tcp_timestamps = 0
+----
+
+Turn timestamps on with the following command:
+
+[source, bash]
+----
+~]# sysctl -w net.ipv4.tcp_timestamps=1
+net.ipv4.tcp_timestamps = 1
+----
+
+Print the current value with the following command:
+
+[source, bash]
+----
+~]# sysctl net.ipv4.tcp_timestamps
+net.ipv4.tcp_timestamps = 1
+----
+
+The value 1 indicates that timestamps are on, the value 0 indicates they are off.
 
 
 
