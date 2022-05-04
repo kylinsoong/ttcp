@@ -5,6 +5,8 @@
 #Ignore Maven generated target folders
 target
 
+.out
+
 # Ignore eclipse files
 .project
 .classpath
