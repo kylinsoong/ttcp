@@ -276,23 +276,167 @@ Cause the SYN Retransmission will trigger SYN + ACK Retransmission time reset, s
 sysctl -w net.ipv4.tcp_syn_retries=9
 ----
 
-this will make the time interval between 6th retry and 7th retry are 32 seconds, the time interval between 7th retry and 8th retry are 62 seconds, which has enough time to view SYN + ACK retransmission, the below diagram show 5 times retransmission:
+this will make the time interval between 6th retry and 7th retry are 32 seconds, the time interval between 7th retry and 8th retry are 64 seconds, which has enough time to view SYN + ACK retransmission. Once set the SYN retries to 9, re-run the recv and trans, it will collect 40 packets with 5 times SYN + ACK Retransmission .
 
 image:img/tcp-synack-retries.png[]
 
-Linux also has a `net.ipv4.tcp_synack_retries` to control synack retries, if look into the time interval between 2 retransmissions, it also comply with with the *Exponential backoff* rule.
+if use `tcp.flags.syn == 1 and tcp.flags.ack == 0` to filter the SYN send to recv by trans, there will be be 10 packets(1st SYN, and 9 times retries):
+
+|===
+|No |SYN Times |Retry SYN Times |Timestamp |Time Interval comapre last SYN Times(seconds)
+
+|1
+|1
+|
+|21:07:38.595
+|
+
+|3
+|2
+|1
+|21:07:39.597
+|1
+
+|6
+|3
+|2
+|21:07:41.600
+|2
+
+|9
+|4
+|3
+|21:07:45.612
+|4
+
+|12
+|5
+|4
+|21:07:53.629
+|8
+
+|15
+|6
+|5
+|21:08:09.643
+|16
+
+|18
+|7
+|6
+|21:08:41.708
+|32
+
+|20
+|8
+|7
+|21:09:45.901
+|64
+
+|27
+|9
+|8
+|21:11:46.221
+|*120*
+
+|34
+|10
+|9
+|21:13:46:540
+|*120*
+|===
+
+From the SYN + ACK Retransmission diagram, there 3 groups SYN + ACK Retransmission finished 5 times Retransmission:
+
+1. between 7th retry SYN(8th SYN) and 8th retry SYN(9th SYN)
+2. between 8th retry SYN(9th SYN) and 9th retry SYN(10th SYN)
+3. after 9th retry SYN(10th SYN)
+
+In conjunction table analysis with SYN Retransmission Exponential backoff:
+
+* Time Interval between 8th retry and 7 th retry should be 128, but the table analysis data is 120
+* Time Interval between 9th retry and 8 th retry should be 256, but the table analysis data is 120
+
+That because another linux kernel parameter `kernel.hung_task_timeout_secs`, by default linux kernel will timeout any task that hang on 120 seconds, each retry be thought as a task in linux kernel.
 
 [source, bash]
-.*net.ipv4.tcp_synack_retries*
 ----
-# sysctl net.ipv4.tcp_synack_retries
-net.ipv4.tcp_synack_retries = 5
+~]# sysctl kernel.hung_task_timeout_secs
+kernel.hung_task_timeout_secs = 120
+---- 
+
+both `SYN Retransmission` and `SYN + ACK Retransmission` are complied with Exponential backoff formular, the relation of timeout and retries are:
+
+[source, bash]
+----
+timeout = 2^n + 2^(n-1) + ... + 2^0
 ----
 
-=== Reset in Three-Way Handshaking
+The relation between reties times and trans app timeout:
+
+|===
+|net.ipv4.tcp_syn_retries |timeout caculation
+
+|6
+|127 = (2^6 + 2^5 + 2^4 + 2^3 + 2^2 + 2^1 + 2^0)
+
+|7
+|247 = (120 + 2^6 + 2^5 + 2^4 + 2^3 + 2^2 + 2^1 + 2^0)
+
+|8
+|367 = (120 + 120 + 2^6 + 2^5 + 2^4 + 2^3 + 2^2 + 2^1 + 2^0)
+
+|9
+|587 = (120 + 120 + 120 + 2^6 + 2^5 + 2^4 + 2^3 + 2^2 + 2^1 + 2^0)
+|===
+
+With the `net.ipv4.tcp_syn_retries=9` the trans will run around 10 minutes to exit, with the default `net.ipv4.tcp_syn_retries=6`, the trans will run around 2 minutes timeout to exit. 
+
+To analysis SYN + ACK Retransmission Exponential backoff times, extract the packet 28 - 33:
+
+|===
+|No |SYN + ACK Times |Retry SYN + ACK Times |Timestamp |Time Interval comapre last SYN + ACK Times(seconds)
+
+|28
+|1
+|
+|21:11:46.221
+|
+
+|29
+|2
+|1
+|21:11:47.627
+|1
+
+|30
+|3
+|2
+|21:11:49.630
+|2
+
+|31
+|4
+|3
+|21:11:54.034
+|4
+
+|32
+|5
+|4
+|21:12:02.043
+|8
+
+|33
+|6
+|5
+|21:12:18.072
+|16
+|===
+
+=== What's will behave if firewall reset SYN?
 
 With the Linux TCP stack, if the timeout or retries occurred, the user space api will get a error(probably the usr space app need to handle error well). But if the client and server communication via a proxy, or firewall, the timeout or retries will end with a reset packet in most of occasion.
-
 
 If set a policy on host `app-2` to REJECT any packet if destination port is `5001`,
 
@@ -304,6 +448,8 @@ iptables -I INPUT -p tcp --dport 5001 -j REJECT --reject-with tcp-reset
 than client will receive the RST packet from server.
 
 image:img/tcp-syn-reset.png[]
+
+=== What's will behave if firewall reset SYN + ACK?
 
 If set a policy on host `app-1` to REJECT any packet if destination port is `20001`,
 
