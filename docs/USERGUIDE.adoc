@@ -485,9 +485,53 @@ image:img/tcp-synack-reset.png[]
 * Why *TCP Previous segment not captured*?
 ** The Client not received `SYN + ACK`.  
 
+=== What's will behave if proxy between trans and recv?
 
+As below diagram, the host `lb-1` play as proxy, host `lb-2` as trans, host `app-1` play as recv.
 
- 
+[source, bash]
+----
+    lb-2    --->    lb-1    --->    app-1
+----
+
+Setup proxy on host `lb-1 `:
+
+1. add DNAT rule to modify destination address to host `app-1`'s ip address.
+
+[source, bash]
+----
+iptables -t nat -A PREROUTING -p tcp -i ens33 -d 10.1.10.201 -j DNAT --to-destination 10.1.20.203
+----
+
+2. add SNAT rule to modify source address to host `lb-1`'s internal NIC referred address
+
+[source, bash]
+----
+iptables -t nat -A POSTROUTING -o ens34 -j SNAT --to 10.1.20.201 
+----
+
+3. enable packet forward on linux kernel network stack
+
+[source, bash]
+----
+sysctl -w net.ipv4.ip_forward=1
+----
+
+Review the Three-Way Handshaking Packet sequence:
+
+[source, bash]
+----
+    lb-2    --->    lb-1    --->    app-1
+
+             1               2
+    SYN     --->    SYN     --->    SYN
+
+             4               3
+SYN + ACK  <---  SYN + ACK  <---  SYN + ACK        
+
+             5               6
+    ACK     --->    ACK     --->    ACK
+---- 
 
 == Data Transfer 
 
