@@ -494,34 +494,66 @@ As below diagram, the host `lb-1` play as proxy, host `lb-2` as trans, host `app
     lb-2    --->    lb-1    --->    app-1
 ----
 
-Setup proxy on host `lb-1 `:
+*Setup proxy on host `lb-1 `*
 
-1. add DNAT rule to modify destination address to host `app-1`'s ip address.
+* add DNAT rule to modify destination address to host `app-1`'s ip address.
 
 [source, bash]
 ----
 iptables -t nat -A PREROUTING -p tcp -i ens33 -d 10.1.10.201 -j DNAT --to-destination 10.1.20.203
 ----
 
-2. add SNAT rule to modify source address to host `lb-1`'s internal NIC referred address
+* add SNAT rule to modify source address to host `lb-1`'s internal NIC referred address
 
 [source, bash]
 ----
 iptables -t nat -A POSTROUTING -o ens34 -j SNAT --to 10.1.20.201 
 ----
 
-3. enable packet forward on linux kernel network stack
+* enable packet forward on linux kernel network stack
 
 [source, bash]
 ----
 sysctl -w net.ipv4.ip_forward=1
 ----
 
-Review the Three-Way Handshaking Packet sequence:
+*Setup recv on host `app-1`*
+
+* Modify `/etc/ttcp.conf`, to disable silent mode
 
 [source, bash]
 ----
-    lb-2    --->    lb-1    --->    app-1
+silent=0
+----
+
+* Start the recv
+
+[source, bash]
+----
+ttcp -r
+----
+
+*Setup trans on host `lb-2`*
+
+* Modify `/etc/ttcp.conf`, to disable silent mode
+
+[source, bash]
+----
+silent=0
+----
+
+* Start the trans
+
+[source, bash]
+----
+ttcp -t 10.1.10.201
+----
+
+*Review the Three-Way Handshaking Packet sequence*
+
+[source, bash]
+----
+    lb-2            lb-1            app-1
 
              1               2
     SYN     --->    SYN     --->    SYN
