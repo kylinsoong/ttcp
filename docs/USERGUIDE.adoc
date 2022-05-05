@@ -114,14 +114,14 @@ image:img/linux-network.png[]
 
 == Three-Way Handshaking
 
-If a server_(eg, user space app on host `app-2`)_ request a *passive open*_(call sockets api tell TCP that it's ready to accept connection)_,
+If a server _(eg, user space app on host `app-2`)_ request a *passive open* _(call sockets api tell TCP that it's ready to accept connection)_,
 
 [source, bash]
 ----
 ttcp -r 
 ----
 
-a client _(on host `app-1` request)_ a *active open*_(call sockets api tell TCP that it needs to be connected to that particular server)_
+a client _(on host `app-1` request)_ a *active open* _(call sockets api tell TCP that it needs to be connected to that particular server)_,
 
 [source, bash]
 ----
@@ -549,7 +549,7 @@ silent=0
 ttcp -t 10.1.10.201
 ----
 
-*Review the Three-Way Handshaking Packet sequence*
+* Review the Three-Way Handshaking Packet sequence*
 
 [source, bash]
 ----
@@ -564,6 +564,102 @@ SYN + ACK  <---  SYN + ACK  <---  SYN + ACK
              5               6
     ACK     --->    ACK     --->    ACK
 ---- 
+
+=== How Three-Way Handshaking in outbound masquerading NAT scenario?
+
+Host `lb-1` play as outbound NAT device, external internet card is ens33, and external IP is 10.1.10.202(`lb-2`'s ip address, ttcp recv run on `lb-2`), 10.1.20.0/24 is internal network, host `app-1` has ttcp trans want to connect external ttcp recv run on `lb-2`.
+
+As below diagram, the host `lb-1` play as outbound NAT device, host `lb-2` run ttcp recv as external internet service, host `app-1` play as ttcp trans.
+
+[source, bash]
+----
+    app-1    --->    lb-1    --->    lb-2
+----
+
+*Setup masquerading NAT on lb-1*
+
+* add MASQUERADE rule to specify source network and out NIC
+
+[source, bash]
+----
+iptables -t nat -A POSTROUTING -o ens33 -s 10.1.20.0/24 -j MASQUERADE
+----
+
+* enable packet forward on linux kernel network stack
+
+[source, bash]
+----
+sysctl -w net.ipv4.ip_forward=1
+----
+
+*Setup recv on host `lb-2`*
+
+* Modify `/etc/ttcp.conf`, to disable silent mode
+
+[source, bash]
+----
+silent=0
+----
+
+* Start the recv
+
+[source, bash]
+----
+ttcp -r
+----
+
+*Setup trans on host `app-1`*
+
+* Modify `/etc/ttcp.conf`, to disable silent mode
+
+[source, bash]
+----
+silent=0
+----
+
+* To make the packet will be routed to NAT device than to external, add static route via update ens33's default gateway
+
+[source, bash]
+----
+nmcli connection modify ens33 ipv4.dns 10.1.20.201
+nmcli connection modify ens33 ipv4.gateway 10.1.20.201
+nmcli connection down ens33 && nmcli connection up ens33 
+----
+
+* Start the trans
+
+[source, bash]
+----
+ttcp -t -P 20010 10.1.10.202
+----
+
+* Review the Three-Way Handshaking Packet sequence*
+
+[source, bash]
+----
+   app-1            lb-1            lb-2
+
+             1               2
+    SYN     --->    SYN     --->    SYN
+
+             4               3
+SYN + ACK  <---  SYN + ACK  <---  SYN + ACK
+
+             5               6
+    ACK     --->    ACK     --->    ACK
+----
+
+* Review the destination/source addr on each host
+
+[source, bash]
+----
+ app-1                   lb-1                    lb-2
+
+ D: 10.1.10.202:5001     D: 10.1.10.202:5001     D: 10.1.10.202:5001
+ S: 10.1.20.203:20010    S: 10.1.10.201:20010    S: 10.1.10.201:20010
+----
+
+NOTE: MASQUERADE rule actually do s SNAT on NAT device, MASQUERADE rule equals to `iptables -t nat -A POSTROUTING -o ens33 -s 10.1.20.0/24 -j SNAT --to 10.1.10.201`.
 
 == Data Transfer 
 
