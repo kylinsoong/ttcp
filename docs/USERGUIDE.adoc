@@ -565,7 +565,9 @@ SYN + ACK  <---  SYN + ACK  <---  SYN + ACK
     ACK     --->    ACK     --->    ACK
 ---- 
 
-=== How Three-Way Handshaking in outbound masquerading NAT scenario?
+=== How packet be forwarded in outbound masquerading NAT scenario?
+
+With masquerading, a system will forward packets that are not directly addressed to itself to the intended recipient, while changing the source address of the packets that go through to its own public IP address. When answers to those packets come in, the system will then modify the destination adress to the address of the original host, and send the packet on. This is usually used on the edge of a network to provide internet access to an internal network. Masquerading is a form of NAT(Network Address Translation).
 
 Host `lb-1` play as outbound NAT device, external internet card is ens33, and external IP is 10.1.10.202(`lb-2`'s ip address, ttcp recv run on `lb-2`), 10.1.20.0/24 is internal network, host `app-1` has ttcp trans want to connect external ttcp recv run on `lb-2`.
 
@@ -660,6 +662,104 @@ SYN + ACK  <---  SYN + ACK  <---  SYN + ACK
 ----
 
 NOTE: MASQUERADE rule actually do s SNAT on NAT device, MASQUERADE rule equals to `iptables -t nat -A POSTROUTING -o ens33 -s 10.1.20.0/24 -j SNAT --to 10.1.10.201`.
+
+=== How packet be forwarded in outbound port forwarding NAT scenario?
+
+Port forwarding is another form of NAT in the edge that internal network to access external internet. With port forwarding, traffic to a single port is forwarded either to a different port on the same machine, or to a port on a different machine. This mechanism is typically used to "hide" a server behind another machine, or to provide access to a service on an alternate port.
+
+To avoid the answers packets be send directly to original client, the port forwarding need masquerading configured.
+
+Host `lb-1` as outbound NAT device, external internet card is ens33, and external IP is 10.1.10.202(`lb-2`'s ip address, ttcp recv run on), 10.1.20.0/24 is internal network, host `app-1` has ttcp trans want to connect external ttcp recv run on `lb-2`, as showing in below diagram.
+
+[source, bash]
+----
+    app-1    --->    lb-1    --->    lb-2
+----
+
+*Setup port forwarding NAT on lb-1*
+
+* add port forwarding E rule to specify source network and out NIC
+
+[source, bash]
+----
+iptables -t nat -A PREROUTING -p tcp -i ens34 --dport 30050 -s 10.1.20.0/24 -j DNAT --to-destination 10.1.10.202:5001
+iptables -t nat -A POSTROUTING -p tcp -o ens33 -s 10.1.20.0/24 -j MASQUERADE
+----
+
+* enable packet forward on linux kernel network stack
+
+[source, bash]
+----
+sysctl -w net.ipv4.ip_forward=1
+----
+
+*Setup recv on host `lb-2`*
+
+* Modify `/etc/ttcp.conf`, to disable silent mode
+
+[source, bash]
+----
+silent=0
+----
+
+* Start the recv
+
+[source, bash]
+----
+ttcp -r
+----
+
+*Setup trans on host `app-1`*
+
+* Modify `/etc/ttcp.conf`, to disable silent mode
+
+[source, bash]
+----
+silent=0
+----
+
+* To make the packet will be routed to NAT device than to external, add static route via update ens33's default gateway
+
+[source, bash]
+----
+nmcli connection modify ens33 ipv4.dns 10.1.20.201
+nmcli connection modify ens33 ipv4.gateway 10.1.20.201
+nmcli connection down ens33 && nmcli connection up ens33
+----
+
+* Start the trans
+
+[source, bash]
+----
+ttcp -t -P 20050 -p 30050 10.1.10.201
+----
+
+* Review the Three-Way Handshaking Packet sequence*
+
+[source, bash]
+----
+   app-1            lb-1            lb-2
+
+             1               2
+    SYN     --->    SYN     --->    SYN
+
+             4               3
+SYN + ACK  <---  SYN + ACK  <---  SYN + ACK
+
+             5               6
+    ACK     --->    ACK     --->    ACK
+----
+
+* Review the destination/source addr on each host
+
+[source, bash]
+----
+ app-1                      lb-1(ens34)            lb-1(ens33)                lb-2
+
+ D: 10.1.10.201:30050       D: 10.1.10.201:30050   D: 10.1.10.202:5001        D: 10.1.10.202:5001
+ S: 10.1.20.203:20050       S: 10.1.20.203:20050   S: 10.1.10.201:20050       S: 10.1.10.201:20050
+----
+
 
 == Data Transfer 
 
