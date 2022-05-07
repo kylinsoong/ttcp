@@ -784,8 +784,8 @@ As below diagram:
 
 [source, bash]
 ----
-iptables -A PREROUTING -t nat -p tcp -d 10.1.10.201 --dport 5001 -m statistic --mode random --probability 0.5 -j DNAT --to-destination 10.1.20.203:5001
-iptables -A PREROUTING -t nat -p tcp -d 10.1.10.201 --dport 5001 -j DNAT --to-destination 10.1.20.204:5001
+iptables -t nat -A PREROUTING -p tcp -d 10.1.10.201 --dport 5001 -m statistic --mode random --probability 0.5 -j DNAT --to-destination 10.1.20.203:5001
+iptables -t nat -A PREROUTING -p tcp -d 10.1.10.201 --dport 5001 -j DNAT --to-destination 10.1.20.204:5001
 iptables -t nat -A POSTROUTING -p tcp ! -s 10.1.20.0/24 -j MASQUERADE
 ----
 
@@ -800,13 +800,6 @@ sysctl -w net.ipv4.ip_forward=1
 
 *Setup revc on app-1/app-2*
 
-* Modify `/etc/ttcp.conf`, to disable silent mode
-
-[source, bash]
-----
-silent=0
-----
-
 * Start the recv
 
 [source, bash]
@@ -816,23 +809,16 @@ ttcp -r
 
 *Setup trans on host `lb-2`*
 
-* Modify `/etc/ttcp.conf`, to disable silent mode
+* Run the trans many times(use `-l` to specify a small buf, `-n` to specify only send one buf) 
 
 [source, bash]
 ----
-silent=0
+for i in {1..1000} ; do ttcp -t -l 1024 -n 1 10.1.10.201 ; done
 ----
 
-* Start the trans
+* Review the iptables stats(2 members almost has the same connections)
 
-[source, bash]
-----
-ttcp -t 10.1.10.201
-----
-
-
-
-
+image:img/iptables-lb-stats.png[]
 
 == Data Transfer 
 
