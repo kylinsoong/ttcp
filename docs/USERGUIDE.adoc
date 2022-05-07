@@ -760,6 +760,79 @@ SYN + ACK  <---  SYN + ACK  <---  SYN + ACK
  S: 10.1.20.203:20050       S: 10.1.20.203:20050   S: 10.1.10.201:20050       S: 10.1.10.201:20050
 ----
 
+=== How packet be forwarded in Load balancing scenario?
+
+Load balancing will distribute connections to multiple hosts, multiple trans connections distribute to multiple recv hosts base on Load balancing algorithm.
+
+As below diagram:
+
+[source, bash]
+----
+                      ---> app-1    
+ lb-2   --->  lb-1   
+                      ---> app-2
+----
+
+* `lb-1` play as load balancer, will have a entry `10.1.10.201:5001`, ttcp trans's connection to this entry will goes into different members
+* `app-1` play as member, which run ttcp recv
+* `app-2` play as member, which run ttcp recv
+* `lb-2` run ttcp trans
+
+*Setup load balancing on lb-1*
+
+* add load balancing rule 
+
+[source, bash]
+----
+iptables -A PREROUTING -t nat -p tcp -d 10.1.10.201 --dport 5001 -m statistic --mode random --probability 0.5 -j DNAT --to-destination 10.1.20.203:5001
+iptables -A PREROUTING -t nat -p tcp -d 10.1.10.201 --dport 5001 -j DNAT --to-destination 10.1.20.204:5001
+iptables -t nat -A POSTROUTING -p tcp ! -s 10.1.20.0/24 -j MASQUERADE
+----
+
+Note that there are 2 different probabilities are defined and not 0.5 everywhere, the reason is that the rules are executed sequentially. With a probability of 0.5, the first rule will be executed 50% of the time and skipped 50% of the time, which means the skipped 50% will goes into second rule.
+
+* enable packet forward on linux kernel network stack
+
+[source, bash]
+----
+sysctl -w net.ipv4.ip_forward=1
+----
+
+*Setup revc on app-1/app-2*
+
+* Modify `/etc/ttcp.conf`, to disable silent mode
+
+[source, bash]
+----
+silent=0
+----
+
+* Start the recv
+
+[source, bash]
+----
+ttcp -r
+----
+
+*Setup trans on host `lb-2`*
+
+* Modify `/etc/ttcp.conf`, to disable silent mode
+
+[source, bash]
+----
+silent=0
+----
+
+* Start the trans
+
+[source, bash]
+----
+ttcp -t 10.1.10.201
+----
+
+
+
+
 
 == Data Transfer 
 
