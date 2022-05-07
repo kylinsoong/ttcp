@@ -820,7 +820,91 @@ for i in {1..1000} ; do ttcp -t -l 1024 -n 1 10.1.10.201 ; done
 
 image:img/iptables-lb-stats.png[]
 
+*Packet forward sequence*
+
+Packet forward sequence samiliar as proxy/nat mode.
+
 == Data Transfer 
+
+=== How to monitor TCP read/write buffer?
+
+TCP is a connection-oriented protocol, which creates a virtual conection between sending process and receiving process; TCP also is a stream-oriented protocol, which allows the sending process to deliver data as a stream of bytes and allows the receiving process to obtain data as a stream of bytes.
+
+Because the sending process and receiving process may not write or read data at the same speed, TCP needs buffers for storage, There are 2 buffers, the sending buffer and the receiving buffer, one for each direction. The buffer use a circular byte array as show in below figure. 
+
+image:img/tcp-buffers.png[]
+
+Linux kernel network stack has 2 parameters to define the TCP read/write buffer.
+
+[source, bash]
+.*net.ipv4.tcp_wmem*
+----
+~]# sysctl net.ipv4.tcp_wmem
+net.ipv4.tcp_wmem = 4096	16384	4194304
+----
+
+`net.ipv4.tcp_wmem` parameter consists of 3 values, a minimum, default, and maximum.
+
+* The minimum represents the smallest receive buffer size a newly created socket is entitled to as part of its creation. The minimum value defaults to 1 page or 4096 bytes.
+* The default value represents the initial size of a TCP sockets receive buffer. This value supersedes `net.core.rmem_default` used by other protocols. It is typically set lower than `net.core.wmem_default`. The default value for this setting is 16K bytes.
+* The maximum represents the largest receive buffer size for auto-tuned send buffers for TCP sockets. This value does not override `net.core.rmem_max`. The default value for this setting is somewhere between 64K bytes and 4M bytes based on the amount of memory available in the system.
+
+[source, bash]
+.*net.ipv4.tcp_rmem*
+----
+~]# sysctl net.ipv4.tcp_rmem
+net.ipv4.tcp_rmem = 4096	87380	6291456
+----
+
+Contains three values that represent the minimum, default and maximum size of the TCP socket receive buffer.
+
+* The minimum represents the smallest receive buffer size guaranteed, even under memory pressure. The minimum value defaults to 1 page or 4096 bytes.
+* The default value represents the initial size of a TCP sockets receive buffer. This value supersedes `net.core.rmem_default` used by other protocols. The default value for this setting is 87380 bytes. 
+* The maximum represents the largest receive buffer size automatically selected for TCP sockets. This value does not override net.core.rmem_max. The default value for this setting is somewhere between 87380 bytes and 6M bytes based on the amount of memory in the system.
+
+[source, bash]
+.*net.ipv4.tcp_moderate_rcvbuf*
+----
+~]# sysctl net.ipv4.tcp_moderate_rcvbuf
+net.ipv4.tcp_moderate_rcvbuf = 1
+----
+
+By default, Linux kernel network stack enable TCP performs receive buffer auto-tuning, attempting to automatically size the buffer (no greater than tcp_rmem) to match the size required by the path for full throughput.
+
+Monitoring the TCP buffer usage is pretty straight-forward; you can grab it from netstat -nt, in the 2nd and 3rd column, for receive and send respectively.
+
+You may also want to monitor this by looking directly to /proc/net/tcp and /proc/net/udp, watching the 5th column; being the right-hand in the colon ( : ) the tx buffer queue; and the right-hand, the RX buffer.
+
+Under a NIC level, we can't grab the real-time ring buffer usage. In some NICs we can watch for drops, using ethtool -S <NIC>, if the driver provides the info.
+
+There's also a tool, named dropwatch, which monitors kernel-level drops. 
+
+[source, bash]
+.*Statr recv*
+----
+ttcp -r
+----
+
+[source, bash]
+.*Start trans, to send 10 GB data to recv*
+----
+ttcp -t -n 10240 10.1.20.204
+----
+
+[source, bash]
+.*Monitor buffer usage data via*
+----
+for i in {1..100} ; do netstat -nt | grep 5001 | awk '{print $2}'; sleep 1 ; done
+for i in {1..100} ; do netstat -nt | grep 5001 | awk '{print $3}'; sleep 1 ; done
+----
+
+image:img/tcp-readwrite-buffer-usa.png[]
+
+link:files/buffer-usage.txt[origin raw stats]
+
+* Write buffer almost 100% used during 100 seconds monitor
+* Read buffer usage keep in 20% during 100 seconds monitor
+* The above testing base on linux default buffer size.
 
 === sequence number and acknowledgment number
 

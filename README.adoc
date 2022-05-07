@@ -48,7 +48,7 @@ link:docs/k8s-native-net-performance.csv[origin test statistics.]
 [source, bash]
 .*1. link:https://guides.github.com/activities/forking/[Fork] and link:https://docs.github.com/en/enterprise/2.15/user/articles/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent[clone] to your local disk*
 ----
-git clone git@github.com:<YOUR_ID>/l4-client-server.git
+git clone git@github.com:<YOUR_ID>/ttcp.git
 ----
 
 *2. Do some coding and submit a PR2. Do some coding and submit a PR*
