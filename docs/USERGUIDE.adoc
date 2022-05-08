@@ -906,7 +906,15 @@ link:files/buffer-usage.txt[origin raw stats]
 * Read buffer usage keep in 20% during 100 seconds monitor
 * The above testing base on linux default buffer size.
 
-=== sequence number and acknowledgment number
+=== How TCP guarantee all bytes be transferred as expected?
+
+TCP is a connection-oriented protocol, stream-oriented protocol, TCP also is a byte-oriented protocol, TCP keeps track of application data sent and received at *byte level*, which means all bytes be transferred as expected.
+
+* TCP numbers all data bytes that are transmitted in a connection.  
+* TCP offers full-duplex service, and numbering is independent in each direction.
+* When TCP receives bytes of data form application, it stores them in the sending buffer and numbers them. The numbering does not start from 0, TCP generates a random number bewteen 0 and 2^32 for the numbering the 1st byte.
+
+With the bytes be numbered, TCP use the *sequence number* and *acknowledgment number* to guarantee all bytes be transferred as expected.
 
 [cols="5a,5a"]
 |===
