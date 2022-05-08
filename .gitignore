@@ -11,6 +11,7 @@ target
 .project
 .classpath
 .settings
+.class
 
 # Ignore IDEA files
 *.iml
