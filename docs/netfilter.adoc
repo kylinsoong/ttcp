@@ -1,0 +1,54 @@
+= netfilter
+:toc: manual
+
+== About netfilter kernel module
+
+The Linux kernel has the built-in ability to filter packets, allowing some of them to be received by or pass through the system while stopping others. The kernel's netfilter has three built-in tables or rules lists. They are as follows:
+
+.*netfilter built-in tables*
+|===
+|Table |Description
+
+|filter
+|The default table for handling network packets.
+
+|nat
+|Used to alter packets that create a new connection and used for Network Address Translation (NAT).
+
+|mangle 
+|Used for specific types of packet alteration.
+|===
+
+Each table has a group of built-in chains which correspond to the actions performed on the packet by the netfilter.
+
+.*netfilter built-chains*
+[cols="2,5a"]
+|===
+|Table |Chains
+
+|filter
+|
+
+* INPUT — Applies to network packets that are targeted for the host.
+* OUTPUT — Applies to locally-generated network packets.
+* FORWARD — Applies to network packets routed through the host.
+
+|nat
+|
+
+* PREROUTING — Alters network packets when they arrive.
+* INPUT - 
+* OUTPUT — Alters locally-generated network packets before they are sent out.
+* POSTROUTING — Alters network packets before they are sent out.
+
+|mangle
+|
+
+* INPUT — Alters network packets targeted for the host.
+* OUTPUT — Alters locally-generated network packets before they are sent out.
+* FORWARD — Alters network packets routed through the host.
+* PREROUTING — Alters incoming network packets before they are routed.
+* POSTROUTING — Alters network packets before they are sent out.
+
+|===
+
