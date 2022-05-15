@@ -52,3 +52,39 @@ Each table has a group of built-in chains which correspond to the actions perfor
 
 |===
 
+== K8S iptables simulation
+
+[source, bash]
+----
+iptables -t nat -N TTCP-SERVICES
+iptables -t nat -A PREROUTING -j TTCP-SERVICES
+
+iptables -t nat -N TTCP-MARK-MASQ
+iptables -t nat -A TTCP-MARK-MASQ -j MARK --or-mark 0x4000
+
+iptables -t nat -N TTCP-SVC-VS
+iptables -t nat -A TTCP-SERVICES -p tcp --dport 5001 -d 10.1.10.201 -j TTCP-SVC-VS 
+iptables -t nat -A TTCP-SVC-VS -p tcp --dport 5001 -d 10.1.10.201 ! -s 10.1.20.0/24 -j TTCP-MARK-MASQ 
+
+iptables -t nat -N TTCP-SEP-01
+iptables -t nat -A TTCP-SEP-01 -s 10.1.20.203 -j TTCP-MARK-MASQ 
+iptables -t nat -A TTCP-SEP-01 -p tcp -j DNAT --to-destination 10.1.20.203:5001
+
+iptables -t nat -N TTCP-SEP-02
+iptables -t nat -A TTCP-SEP-02 -s 10.1.20.204 -j TTCP-MARK-MASQ 
+iptables -t nat -A TTCP-SEP-02 -p tcp -j DNAT --to-destination 10.1.20.204:5001
+
+iptables -t nat -A TTCP-SVC-VS -j TTCP-SEP-01 -m statistic --mode random --probability 0.5
+iptables -t nat -A TTCP-SVC-VS -j TTCP-SEP-02
+
+iptables -t nat -A OUTPUT -j TTCP-SERVICES
+
+iptables -t nat -N TTCP-POSTROUTING
+iptables -t nat -A POSTROUTING -j TTCP-POSTROUTING
+
+iptables -t nat -A TTCP-POSTROUTING -j RETURN
+iptables -t nat -A TTCP-POSTROUTING -j MARK --xor-mark 0x4000
+iptables -t nat -A TTCP-POSTROUTING -j MASQUERADE
+
+iptables -t nat -X TTCP-SERVICES
+----
