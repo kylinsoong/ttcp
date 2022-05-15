@@ -52,9 +52,12 @@ Each table has a group of built-in chains which correspond to the actions perfor
 
 |===
 
-== K8S iptables simulation
+== Kubernetes with netfilter
+
+Kubernetes heavily depend on netfilter, below is a sample for simulate Kubernetes ClusterIP service.
 
 [source, bash]
+.*Creation*
 ----
 iptables -t nat -N TTCP-SERVICES
 iptables -t nat -A PREROUTING -j TTCP-SERVICES
@@ -85,6 +88,66 @@ iptables -t nat -A POSTROUTING -j TTCP-POSTROUTING
 iptables -t nat -A TTCP-POSTROUTING -j RETURN
 iptables -t nat -A TTCP-POSTROUTING -j MARK --xor-mark 0x4000
 iptables -t nat -A TTCP-POSTROUTING -j MASQUERADE
-
-iptables -t nat -X TTCP-SERVICES
 ----
+
+[source, bash]
+.*Deletion*
+----
+iptables -t nat -D PREROUTING 1
+iptables -t nat -D OUTPUT 1
+iptables -t nat -D POSTROUTING 1
+
+iptables -t nat -D TTCP-SERVICES 1
+iptables -t nat -X TTCP-SERVICES
+
+iptables -t nat -D TTCP-SVC-VS 3
+iptables -t nat -D TTCP-SVC-VS 2
+iptables -t nat -D TTCP-SVC-VS 1
+iptables -t nat -X TTCP-SVC-VS
+
+iptables -t nat -D TTCP-SEP-01 2
+iptables -t nat -D TTCP-SEP-01 1
+iptables -t nat -X TTCP-SEP-01
+
+iptables -t nat -D TTCP-SEP-02 2
+iptables -t nat -D TTCP-SEP-02 1
+iptables -t nat -X TTCP-SEP-02
+
+iptables -t nat -D TTCP-MARK-MASQ 1
+iptables -t nat -X TTCP-MARK-MASQ
+
+iptables -t nat -D TTCP-POSTROUTING 2
+iptables -t nat -D TTCP-POSTROUTING 1
+iptables -t nat -X TTCP-POSTROUTING 
+----
+
+== NAT
+
+=== Concepts
+
+*Three scenarios of NAT*
+
+* *Outbond to internet* - you has single public IP address from your ISP vendor, but you have bunch of servers that need to connect to internet, only replies to packets with this IP address as source address  will return to you.
+* *Multiple Servers* - you use one IP address to access multiple servers, Sometimes you want to change where packets heading into your network will go. Frequently this is because (as above), you have only one IP address, but you want people to be able to get into the boxes behind the one with the `real' IP address. If you rewrite the destination of incoming packets, you can manage this. This type of NAT was called port-forwarding under previous versions of Linux.
+* *Transparent Proxying* - Sometimes you want to pretend that each packet which passes through your Linux box is destined for a program on the Linux box itself. This is used to make transparent proxies: a proxy is a program which stands between your network and the outside world, shuffling communication between the two. The transparent part is because your network won't even know it's talking to a proxy, unless of course, the proxy doesn't work.
+  
+*Two types of NAT*
+
+* *Source NAT (SNAT)* - alter the source address of the first packet.
+* *Destination NAT (DNAT)* - alter the destination address of the first packet
+
+=== MASQUERADE
+
+If the public IP address is dynamically allocated, then MASQUERADE can be used.
+
+[source, bash]
+----
+iptables -t nat -A POSTROUTING -s 10.1.20.0/24 -o ens33 -j MASQUERADE
+----
+
+10.1.10.202 as internet service, 10.1.10.201 as gateway, 10.1.20.203 as internel client.
+
+image:img/iptables-MASQUERADE.png[]
+
+
+
