@@ -149,5 +149,41 @@ iptables -t nat -A POSTROUTING -s 10.1.20.0/24 -o ens33 -j MASQUERADE
 
 image:img/iptables-MASQUERADE.png[]
 
+NOTE: MASQUERADE is used while public IP address is dynamically allocated, in this scenario, 10.1.10.201 is dynamically allocated.
+
+=== SNAT
+
+If the public IP address is mannually assigned, then the SNAT could be use to supply same ability like MASQUERADE.
+
+[source, bash]
+----
+iptables -t nat -A POSTROUTING -o ens33 -s 10.1.20.0/24 -j SNAT --to 10.1.10.201
+----
+
+image:img/iptables-SNAT.png[]
+
+=== DNAT + MASQUERADE 
+
+Gateway hidden the server, 10.1.10.202 as a client to access the hidden server via 10.1.10.201 exposed endpoint 10.1.10.201:50050.
+
+[source, bash]
+----
+iptables -t nat -A PREROUTING -p tcp -i ens33 -s 10.1.10.0/24 -d 10.1.10.201 --dport 50050 -j DNAT --to 10.1.20.203:5001
+iptables -t nat -A POSTROUTING -s 10.1.10.0/24 -o ens34 -j MASQUERADE
+----
+
+image:img/iptables-DNAT-MASQUERADE.png[]
+
+=== DNAT + SNAT
+
+Gateway hidden the server, the intranet gateway IP address is assigned manually, 10.1.10.202 as a client to access the hidden server via 10.1.10.201 exposed endpoint 10.1.10.201:50050.
+
+[source, bash]
+----
+iptables -t nat -A PREROUTING -p tcp -i ens33 -s 10.1.10.0/24 -d 10.1.10.201 --dport 50050 -j DNAT --to 10.1.20.203:5001
+iptables -t nat -A POSTROUTING -o ens34 -s 10.1.10.0/24 -j SNAT --to 10.1.20.201
+----
+
+image:img/iptables-DNAT-SNAT.png[]
 
 
