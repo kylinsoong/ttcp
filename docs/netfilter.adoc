@@ -186,4 +186,59 @@ iptables -t nat -A POSTROUTING -o ens34 -s 10.1.10.0/24 -j SNAT --to 10.1.20.201
 
 image:img/iptables-DNAT-SNAT.png[]
 
+=== DNAT + SNAT with source port range
 
+Still in hidden the server way, 10.1.20.201 as intranet SNAT address, but with port range start from 30000 to 50000.
+
+[source, bash]
+----
+iptables -t nat -A PREROUTING -p tcp -i ens33 -s 10.1.10.0/24 -d 10.1.10.201 --dport 50050 -j DNAT --to 10.1.20.203:5001
+iptables -t nat -A POSTROUTING -p tcp -o ens34 -s 10.1.10.0/24 -j SNAT --to 10.1.20.201:30000-50000
+----
+
+image:img/iptables-DNS-SNAT-port-range.png[]
+
+=== DNAT + SNAT Pool
+
+Still in hidden the server way, this time add a SNAT Pool.
+
+add SNAT pool member address before set SNAT rule.
+
+[source, bash]
+----
+ip addr add 10.1.20.101/24 dev ens34
+ip addr add 10.1.20.102/24 dev ens34
+ip addr add 10.1.20.103/24 dev ens34
+----
+
+[source, bash]
+----
+iptables -t nat -A PREROUTING -p tcp -i ens33 -s 10.1.10.0/24 -d 10.1.10.201 --dport 50050 -j DNAT --to 10.1.20.203:5001
+iptables -t nat -A POSTROUTING -o ens34 -s 10.1.10.0/24 -j SNAT --to 10.1.20.101-10.1.20.103
+---- 
+
+image:img/iptables-DNAT-SANT-Pool.png[]
+
+=== DNAT Load Balancer + SNAT Pool
+
+Random mode with probability is 0.5 will load balancing traffic to 2 hidden servers with Round Robin algorithm.
+
+[source, bash]
+----
+iptables -t nat -A PREROUTING -p tcp -i ens33 -s 10.1.10.0/24 -d 10.1.10.201 --dport 50050 -m statistic --mode random --probability 0.5 -j DNAT --to 10.1.20.203:5001
+iptables -t nat -A PREROUTING -p tcp -i ens33 -s 10.1.10.0/24 -d 10.1.10.201 --dport 50050 -j DNAT --to 10.1.20.204:5001
+iptables -t nat -A POSTROUTING -o ens34 -s 10.1.10.0/24 -j SNAT --to 10.1.20.101-10.1.20.103
+----
+
+image:img/iptables-DNAT-LB-SNAT-Pool.png[]
+
+After some testing, check the traffic distribution.
+
+[source, bash]
+----
+~]# iptables -t nat -vnL PREROUTING
+Chain PREROUTING (policy ACCEPT 49 packets, 10707 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+  552 33120 DNAT       tcp  --  ens33  *       10.1.10.0/24         10.1.10.201          tcp dpt:50050 statistic mode random probability 0.50000000000 to:10.1.20.203:5001
+  550 33000 DNAT       tcp  --  ens33  *       10.1.10.0/24         10.1.10.201          tcp dpt:50050 to:10.1.20.204:5001
+----
