@@ -1242,17 +1242,9 @@ net.ipv4.tcp_timestamps = 1
 
 The value 1 indicates that timestamps are on, the value 0 indicates they are off.
 
+== L4 Proxy/LB Device & Software
 
-
-
-== netfilter
-
-Refer to link:netfilter.adoc[link] for linux kernel network netfilter.
-
-
-== F5 BIG-IP fastl4 profie
-
-=== Reset on timeout
+=== Reset on timeout setting on BIG-IP fastl4 profie
 
 If set the reset-on-timeout to enable, and specify a idle timeout,
 
@@ -1266,7 +1258,7 @@ the system sends a reset packet (RST) when a connection exceeds the idle timeout
 
 image:img/reset-idle-timeout.png[]
 
-=== MSS Overwrite
+=== MSS Overwrite on BIG-IP fastL4 profile
 
 If set mss-override enable and set a value,
 
@@ -1300,4 +1292,15 @@ than the Proxy will overwrite MSS(Maximum segment size), the smaller mss, the lo
 The MSS is specified as a TCP option initially as TCP SYN packet.
 
 image:img/mss-overwrite.png[]
+
+
+== Linux Network Filter
+
+Refer to link:netfilter.adoc[link] for linux kernel network netfilter.
+
+
+== Linux Network IP
+
+Refer to link:linux-ip.adoc[link] for linux Network IP.
+
 
