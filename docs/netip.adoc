@@ -1,0 +1,194 @@
+= Linux Network IP
+:toc: manual
+
+== Basic Commands
+
+=== ifconfig
+
+[source, bash]
+.*ifconfig*
+----
+~]# ifconfig 
+ens33: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 10.1.20.203  netmask 255.255.255.0  broadcast 10.1.20.255
+        inet6 fe80::d344:5bb:e74c:e7e  prefixlen 64  scopeid 0x20<link>
+        ether 00:0c:29:12:42:30  txqueuelen 1000  (Ethernet)
+        RX packets 58  bytes 7217 (7.0 KiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 79  bytes 9094 (8.8 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+        inet 127.0.0.1  netmask 255.0.0.0
+        inet6 ::1  prefixlen 128  scopeid 0x10<host>
+        loop  txqueuelen 1000  (Local Loopback)
+        RX packets 0  bytes 0 (0.0 B)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 0  bytes 0 (0.0 B)
+----
+
+`ifconfig` can read information of IP, as per interface ens33, the active IP on this host is `10.1.20.203`, this means any packet created by this host will have a source address of `10.1.20.203`, Similarly any packet received by this host will have the destination address of `10.1.20.203`.
+
+=== route
+
+[source, bash]
+.*route*
+----
+~]# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+0.0.0.0         10.1.20.2       0.0.0.0         UG    100    0        0 ens33
+10.1.10.0       10.1.20.201     255.255.255.0   UG    0      0        0 ens33
+10.1.10.202     10.1.20.201     255.255.255.255 UGH   0      0        0 ens33
+10.1.20.0       0.0.0.0         255.255.255.0   U     100    0        0 ens33
+----
+
+We can see from the output above that the IP address 10.1.20.35 falls inside the address space 10.1.20.0/24. We also note that the machine will route packets bound for 10.1.20.0/24 directly onto the Ethernet attached to ens33. 
+
+[source, bash]
+.*route add & route del*
+----
+route add -net 10.1.10.0 netmask 255.255.255.0 gw 10.1.20.201
+route del -net 10.1.10.0 netmask 255.255.255.0 gw 10.1.20.201
+route add -net 10.1.10.202 netmask 255.255.255.255 gw 10.1.20.201
+route del -net 10.1.10.202 netmask 255.255.255.255 gw 10.1.20.201
+route add -host 10.1.10.202 gw 10.1.20.201
+route del -host 10.1.10.202 gw 10.1.20.201
+----
+
+== Ethernet
+
+=== link
+
+[source, bash]
+.*ip link*
+----
+~]# ip link show
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+2: ens33: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP mode DEFAULT group default qlen 1000
+    link/ether 00:0c:29:55:e4:52 brd ff:ff:ff:ff:ff:ff
+3: ens34: <BROADCAST,MULTICAST> mtu 1500 qdisc pfifo_fast state DOWN mode DEFAULT group default qlen 1000
+    link/ether 00:0c:29:55:e4:5c brd ff:ff:ff:ff:ff:ff
+
+~]# ip link set ens34 up
+----
+
+The `ip link` used to control link layer, the `ip link set` can be used to control quite a lot of link layer layer settings, `ip link help` can show more details.
+
+In the above the NIC ens33's MAC address is `00:0c:29:55:e4:52`, and ens34's MAC address is `00:0c:29:55:e4:5c`, `ff:ff:ff:ff:ff:ff` is broadcast address.
+
+=== arping
+
+`arping` used to send ARP REQUEST to a neighbour host.
+
+[source, bash]
+----
+arping -q -c 3 10.1.20.204
+----
+
+tcpdump with `-e` option will print Ethernet headers.
+
+[source, bash]
+----
+~]# tcpdump -ennqti ens33 arp
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on ens33, link-type EN10MB (Ethernet), capture size 262144 bytes
+00:0c:29:12:42:30 > ff:ff:ff:ff:ff:ff, ARP, length 42: Request who-has 10.1.20.204 (ff:ff:ff:ff:ff:ff) tell 10.1.20.203, length 28
+00:0c:29:66:4d:60 > 00:0c:29:12:42:30, ARP, length 60: Reply 10.1.20.204 is-at 00:0c:29:66:4d:60, length 46
+00:0c:29:12:42:30 > 00:0c:29:66:4d:60, ARP, length 42: Request who-has 10.1.20.204 (00:0c:29:66:4d:60) tell 10.1.20.203, length 28
+00:0c:29:66:4d:60 > 00:0c:29:12:42:30, ARP, length 60: Reply 10.1.20.204 is-at 00:0c:29:66:4d:60, length 46
+00:0c:29:12:42:30 > 00:0c:29:66:4d:60, ARP, length 42: Request who-has 10.1.20.204 (00:0c:29:66:4d:60) tell 10.1.20.203, length 28
+00:0c:29:66:4d:60 > 00:0c:29:12:42:30, ARP, length 60: Reply 10.1.20.204 is-at 00:0c:29:66:4d:60, length 46
+----
+
+=== ARP cache
+
+An ARP cache is a stored mapping of IP addresses with link layer addresses.
+
+[source, bash]
+.*ip neighbor*
+----
+~]# ip neighbor show
+10.1.20.2 dev ens33 lladdr 00:50:56:e9:f1:30 REACHABLE
+10.1.20.204 dev ens33 lladdr 00:0c:29:66:4d:60 STALE
+10.1.10.201 dev ens33 lladdr 00:0c:29:55:e4:5c STALE
+10.1.20.1 dev ens33 lladdr a6:83:e7:a8:09:67 REACHABLE
+10.1.20.201 dev ens33 lladdr 00:0c:29:55:e4:5c REACHABLE
+----
+
+[source, bash]
+.*arp*
+----
+~]# arp -na
+? (10.1.20.2) at 00:50:56:e9:f1:30 [ether] on ens33
+? (10.1.20.204) at 00:0c:29:66:4d:60 [ether] on ens33
+? (10.1.10.201) at 00:0c:29:55:e4:5c [ether] on ens33
+? (10.1.20.1) at a6:83:e7:a8:09:67 [ether] on ens33
+? (10.1.20.201) at 00:0c:29:55:e4:5c [ether] on ens33
+----
+
+[source, bash]
+.*net.ipv4.neigh.ens33.gc_stale_time used to set the stale time*
+----
+~]# sysctl net.ipv4.neigh.ens33.gc_stale_time 
+net.ipv4.neigh.ens33.gc_stale_time = 60
+----
+
+When a host is down or disconnected from the Ethernet, there is a period of time during which other hosts may have an ARP cache entry for the disconnected host. 
+
+
+[source, bash]
+.**
+----
+
+----
+
+[source, bash]
+.**
+----
+
+----
+
+[source, bash]
+.**
+----
+
+----
+
+[source, bash]
+.**
+----
+
+----
+
+[source, bash]
+.**
+----
+
+----
+
+[source, bash]
+.**
+----
+
+----
+
+[source, bash]
+.**
+----
+
+----
+
+[source, bash]
+.**
+----
+
+----
+
+[source, bash]
+.**
+----
+
+----
+

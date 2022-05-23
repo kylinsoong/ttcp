@@ -1301,6 +1301,6 @@ Refer to link:netfilter.adoc[link] for linux kernel network netfilter.
 
 == Linux Network IP
 
-Refer to link:linux-ip.adoc[link] for linux Network IP.
+Refer to link:netip.adoc[link] for linux Network IP.
 
 
