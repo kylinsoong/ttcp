@@ -56,9 +56,7 @@ route add -host 10.1.10.202 gw 10.1.20.201
 route del -host 10.1.10.202 gw 10.1.20.201
 ----
 
-== Ethernet
-
-=== link
+=== ip link
 
 [source, bash]
 .*ip link*
@@ -102,7 +100,7 @@ listening on ens33, link-type EN10MB (Ethernet), capture size 262144 bytes
 00:0c:29:66:4d:60 > 00:0c:29:12:42:30, ARP, length 60: Reply 10.1.20.204 is-at 00:0c:29:66:4d:60, length 46
 ----
 
-=== ARP cache
+=== ip neighbor & arp
 
 An ARP cache is a stored mapping of IP addresses with link layer addresses.
 
@@ -137,18 +135,74 @@ net.ipv4.neigh.ens33.gc_stale_time = 60
 
 When a host is down or disconnected from the Ethernet, there is a period of time during which other hosts may have an ARP cache entry for the disconnected host. 
 
+== Net Interface
+
+=== Setting a Static IP
 
 [source, bash]
-.**
+.*Update DHCP dynamic IP address assign to manual static IP address assign*
+----
+nmcli connection modify ens36 ipv4.method manual ipv4.addresses 10.1.30.106/24 ipv4.gateway 10.1.30.2 ipv4.dns 10.1.30.2
+nmcli connection modify ens37 ipv4.method manual ipv4.addresses 10.1.30.107/24 ipv4.gateway 10.1.30.2 ipv4.dns 10.1.30.2
+nmcli connection down ens36 && nmcli connection up ens36
+nmcli connection down ens37 && nmcli connection up ens37
 ----
 
-----
+=== Multiple IPs on the Same Interface
 
 [source, bash]
-.**
+.*Set multiple IP addresses to same Interface*
+----
+nmcli connection modify ens36 ipv4.addresses 10.1.30.101/24,10.1.30.102/24,10.1.30.103/24
+nmcli connection down ens36 && nmcli connection up ens36
 ----
 
+=== Bonding and Teaming
+
+.*Bonding vs Teaming*
+[cols="5a,5a"]
+|===
+|Teaming |Bonding
+
+|
+* Support for IPv6 link monitoring
+* Able to work with D-Bus and Unix Domain Sockets
+* Load balancing for LACP support 
+* Leverages NetworkManager and associated tools
+
+|
+* Doesn't require teamd
+* Works in a virtual environment
+
+|===
+
+[source, bash]
+.*Bonding*
 ----
+nmcli con add type bond con-name bond0 ifname bond0 mode active-backup ip4 10.1.30.50/24 gw4 10.1.30.2
+nmcli con add type bond-slave ifname ens36 master bond0
+nmcli con add type bond-slave ifname ens37 master bond0
+nmcli con up bond-slave-ens36
+nmcli con up bond-slave-ens37
+----
+
+image:img/linux-netip-bonding.png[]
+
+[source, bash]
+.*Teaming*
+----
+nmcli con delete ens36
+nmcli con delete ens37
+nmcli con add type team con-name team0 ifname team0 ip4 10.1.30.50/24 gw4 10.1.30.2 team.config '{"runner": {"name": "activebackup"}, "link_watch": {"name": "ethtool"}}'
+nmcli con add type team-slave con-name slave1 ifname ens36 master team0
+nmcli con add type team-slave con-name slave2 ifname ens37 master team0
+----
+
+NOTE: `/usr/share/doc/teamd-1.29/example_configs` has configuration samples.
+
+
+
+== TD
 
 [source, bash]
 .**
