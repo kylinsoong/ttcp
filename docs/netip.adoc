@@ -56,6 +56,16 @@ route add -host 10.1.10.202 gw 10.1.20.201
 route del -host 10.1.10.202 gw 10.1.20.201
 ----
 
+=== ip route
+
+[source, bash]
+.*ip route*
+----
+~]# ip route show
+default via 10.1.20.2 dev ens33 proto static metric 100 
+10.1.20.0/24 dev ens33 proto kernel scope link src 10.1.20.204 metric 100 
+----
+
 === ip link
 
 [source, bash]
@@ -135,6 +145,55 @@ net.ipv4.neigh.ens33.gc_stale_time = 60
 
 When a host is down or disconnected from the Ethernet, there is a period of time during which other hosts may have an ARP cache entry for the disconnected host. 
 
+=== ipcalc
+
+`ipcalc` used to perform simple manipulation of IP addresses.
+
+[source, bash]
+.*Find the prefix and network*
+----
+~]# for i in {1..255} ; do ipcalc -n  10.1.10.$i/24 ; done | sort -u
+NETWORK=10.1.10.0
+
+~]# for i in {1..255} ; do ipcalc -n  10.1.10.$i/25 ; done | sort -u
+NETWORK=10.1.10.0
+NETWORK=10.1.10.128
+
+~]# for i in {1..255} ; do ipcalc -n  10.1.10.$i/26 ; done | sort -u
+NETWORK=10.1.10.0
+NETWORK=10.1.10.64
+NETWORK=10.1.10.128
+NETWORK=10.1.10.192
+
+~]# for i in {1..255} ; do ipcalc -n  10.1.10.$i/27 ; done | sort -u
+NETWORK=10.1.10.0
+NETWORK=10.1.10.32
+NETWORK=10.1.10.64
+NETWORK=10.1.10.96
+NETWORK=10.1.10.128
+NETWORK=10.1.10.160
+NETWORK=10.1.10.192
+NETWORK=10.1.10.224
+
+~]# for i in {1..255} ; do ipcalc -n  10.1.10.$i/28 ; done | sort -u
+NETWORK=10.1.10.0
+NETWORK=10.1.10.16
+NETWORK=10.1.10.32
+NETWORK=10.1.10.48
+NETWORK=10.1.10.64
+NETWORK=10.1.10.80
+NETWORK=10.1.10.96
+NETWORK=10.1.10.112
+NETWORK=10.1.10.128
+NETWORK=10.1.10.144
+NETWORK=10.1.10.160
+NETWORK=10.1.10.176
+NETWORK=10.1.10.192
+NETWORK=10.1.10.208
+NETWORK=10.1.10.224
+NETWORK=10.1.10.240
+----
+
 == Net Interface
 
 === Setting a Static IP
@@ -200,38 +259,48 @@ nmcli con add type team-slave con-name slave2 ifname ens37 master team0
 
 NOTE: `/usr/share/doc/teamd-1.29/example_configs` has configuration samples.
 
+[source, bash]
+.*add back ethernet connection*
+----
+nmcli connection add type ethernet con-name ens36 ifname ens36 ipv4.method manual ipv4.addresses 10.1.30.106/24 ipv4.gateway 10.1.30.2 ipv4.dns 10.1.30.2
+nmcli connection add type ethernet con-name ens37 ifname ens37 ipv4.method manual ipv4.addresses 10.1.30.107/24 ipv4.gateway 10.1.30.2 ipv4.dns 10.1.30.2
+----
 
+== Routing
 
-== TD
+=== prohibit
 
 [source, bash]
-.**
+.*set prohibit*
 ----
-
-----
-
-[source, bash]
-.**
-----
-
-----
-
-[source, bash]
-.**
-----
-
+ip route add prohibit 10.1.30.0/24
 ----
 
 [source, bash]
-.**
+.*test prohibit*
 ----
-
+~]# ping 10.1.30.2
+Do you want to ping broadcast? Then -b. If not, check your local firewall rules.
 ----
 
 [source, bash]
-.**
+.*flush prohibit*
+----
+ip route flush 10.1.30.0/24
 ----
 
+=== static gateway
+
+[source, bash]
+.*add static route*
+----
+ip route add 10.1.10.202 via 10.1.20.201 dev ens33
+----
+
+[source, bash]
+.*flush static route*
+----
+ip route flush 10.1.10.202
 ----
 
 [source, bash]
