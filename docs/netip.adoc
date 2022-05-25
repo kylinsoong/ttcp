@@ -1,6 +1,72 @@
 = Linux Network IP
 :toc: manual
 
+== Route Management
+
+=== route
+
+[source, bash]
+.*Displaying the routing table*
+----
+~]# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+0.0.0.0         10.1.20.2       0.0.0.0         UG    100    0        0 ens33
+10.1.20.0       0.0.0.0         255.255.255.0   U     100    0        0 ens33
+----
+
+There are 2 records in route table, the 2nd is a a locally reachable network(10.1.20.0/24), If an address falls within the 10.1.20.0/24 range, the hosts knows it can reach the IP range directly on the wire, so any packets bound for this range will be pushed out onto the local media.
+
+The 1st is everything else, If the packet falls in any other range, the host will consult its routing table and find no single route that matches. In this case, the default route functions as a terminal choice. If no other route matches, the packet will be forwarded to this destination address, which is usually a router to another set of networks and routers.
+
+The Flags *G* for destination not locally connected to the linux machine.
+
+[source, bash]
+.*Creating a static route*
+----
+route add -net 10.1.10.0 netmask 255.255.255.0 gw 10.1.20.201
+route add -net 10.1.10.202 netmask 255.255.255.255 gw 10.1.20.201
+route add -host 10.1.10.202 gw 10.1.20.201
+route add default gw 10.1.20.2
+route add -net 0.0.0.0 netmask 0.0.0.0 gw 10.1.20.2
+----
+
+[source, bash]
+.*Displaying the routing cache*
+----
+route -Cen
+----
+
+[source, bash]
+.*Removing routes*
+----
+route del -net 10.1.10.0 netmask 255.255.255.0 gw 10.1.20.201
+route del -net 10.1.10.202 netmask 255.255.255.255 gw 10.1.20.201
+route del -host 10.1.10.202 gw 10.1.20.201
+route del default gw 10.1.20.2
+route del -net 0.0.0.0 netmask 0.0.0.0 gw 10.1.20.2
+----
+
+=== ip route
+
+[source, bash]
+.*Displaying the routing table*
+----
+~]# ip route show
+default via 10.1.20.2 dev ens33 
+10.1.20.0/24 dev ens33 proto kernel scope link src 10.1.20.204 metric 100 
+----
+
+`ip route show` is similar to `route -n`, but the `ip route` can run on any routing table, and `route` only run on main table. By default the `ip route show` run against main table.
+
+
+
+
+
+
+
+
+
 == Basic Commands
 
 === ifconfig
@@ -28,43 +94,6 @@ lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
 ----
 
 `ifconfig` can read information of IP, as per interface ens33, the active IP on this host is `10.1.20.203`, this means any packet created by this host will have a source address of `10.1.20.203`, Similarly any packet received by this host will have the destination address of `10.1.20.203`.
-
-=== route
-
-[source, bash]
-.*route*
-----
-~]# route -n
-Kernel IP routing table
-Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
-0.0.0.0         10.1.20.2       0.0.0.0         UG    100    0        0 ens33
-10.1.10.0       10.1.20.201     255.255.255.0   UG    0      0        0 ens33
-10.1.10.202     10.1.20.201     255.255.255.255 UGH   0      0        0 ens33
-10.1.20.0       0.0.0.0         255.255.255.0   U     100    0        0 ens33
-----
-
-We can see from the output above that the IP address 10.1.20.35 falls inside the address space 10.1.20.0/24. We also note that the machine will route packets bound for 10.1.20.0/24 directly onto the Ethernet attached to ens33. 
-
-[source, bash]
-.*route add & route del*
-----
-route add -net 10.1.10.0 netmask 255.255.255.0 gw 10.1.20.201
-route del -net 10.1.10.0 netmask 255.255.255.0 gw 10.1.20.201
-route add -net 10.1.10.202 netmask 255.255.255.255 gw 10.1.20.201
-route del -net 10.1.10.202 netmask 255.255.255.255 gw 10.1.20.201
-route add -host 10.1.10.202 gw 10.1.20.201
-route del -host 10.1.10.202 gw 10.1.20.201
-----
-
-=== ip route
-
-[source, bash]
-.*ip route*
-----
-~]# ip route show
-default via 10.1.20.2 dev ens33 proto static metric 100 
-10.1.20.0/24 dev ens33 proto kernel scope link src 10.1.20.204 metric 100 
-----
 
 === ip link
 
@@ -304,9 +333,15 @@ ip route flush 10.1.10.202
 ----
 
 [source, bash]
-.**
+.*add static route*
+----
+ip route add 10.1.10.0/24 via 10.1.20.201 dev ens33
 ----
 
+[source, bash]
+.*flush static route*
+----
+ip route flush 10.1.10.0/24
 ----
 
 [source, bash]
