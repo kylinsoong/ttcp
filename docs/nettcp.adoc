@@ -1135,6 +1135,149 @@ The value 1 indicates that timestamps are on, the value 0 indicates they are off
 
 === How congestion control algorithm impact on throughput?
 
+Firstly, the TCP congestion control terms as below.
+
+image:img/tcp-congestion-introduction.png[]
+
+[cols="2,5a"]
+|===
+|Term |Description
+
+|Cumulative Acknowledgement
+|The receiver not Acknowledge sender per segments, as the example of above figure, after receiving first 2 segments containing sequence number 90 and 100, the receiver sends a segment with acknowledge number 110, this segment is called Cumulative Acknowledgement. 
+
+|Congestion window(cwnd)
+|Imposes a constraint on the rate at which a TCP sender can send traffic. The cwnd value is the amount of unacknowledged data at the sender.
+
+|TCP Throughput
+|
+
+----
+TCP Throughput ≈ (cwnd / RTT ) [bytes/second] 
+----
+
+|Multiplicative Decrease
+|If the TCP sender receives three duplicate ACKs for the same segment, TCP interprets this event as packet loss due to congestion and reduces the congestion window `cwnd` by half. This congestion window reduction is known as multiplicative decrease. 
+
+|Additive Increase
+|After decreasing cwnd by half, and as long as no other packet loss is detected, TCP will slowly increase `cwnd` again by 1 MSS per RTT. This congestion control phase essentially produces an additive increase in the congestion window. 
+
+|Congestion Control
+|TCP congestion control is referred to as an Additive-Increase Multiplicative-Decrease (AIMD) form of congestion control. AIMD gives rise to the *sawtooth* behavior shown in above figure, which also illustrates the idea of TCP *probing* for bandwidth—TCP linearly increases its congestion window size (and hence its transmission rate) until a triple duplicate-ACK event occurs. It then decreases its congestion window size by a factor of two but then again begins increasing it linearly, probing to see if there is additional available bandwidth.
+
+|===
+
+[source, bash]
+.*Commands used to check congestion control algorithm*
+----
+~]# sysctl net.ipv4.tcp_available_congestion_control
+net.ipv4.tcp_available_congestion_control = cubic reno
+~]# sysctl net.ipv4.tcp_congestion_control
+net.ipv4.tcp_congestion_control = cubic
+----
+
+* *cubic* - CUBIC-TCP. Optimized congestion control algorithm for high bandwidth networks with high latency. Operates in a similar but more systematic fashion than BIC-TCP, in which its congestion window is a cubic function of time since the last packet loss, with the inflection point set to the window prior to the congestion event.
+* *reno* - Traditional TCP used by almost all other Operating Systems. Characterized by slow start, congestion avoidance, and fast retransmission via triple duplicate ACKs.
+* *bic* - BIC-TCP. Congestion window utilizes a binary search algorithm to find the largest congestion window that will last the maximum amount of time.
+* *htcp* - Hamilton TCP. A loss-based algorithm using additive-increase and multiplicative-decrease to control TCP’s congestion window.
+
+[source, bash]
+.*Congestion control algorithm comparision bash*
+----
+#!/bin/bash  
+
+set -e
+set -x
+
+#tc qdisc add dev ens33 root handle 1: netem loss 0.01%
+
+tc qdisc change dev ens33 root handle 1: netem loss 0.01% delay 0ms
+sysctl -w net.ipv4.tcp_congestion_control=cubic
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+sysctl -w net.ipv4.tcp_congestion_control=reno
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+sysctl -w net.ipv4.tcp_congestion_control=htcp
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+
+tc qdisc change dev ens33 root handle 1: netem loss 0.01% delay 10ms
+sysctl -w net.ipv4.tcp_congestion_control=cubic
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+sysctl -w net.ipv4.tcp_congestion_control=reno
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+sysctl -w net.ipv4.tcp_congestion_control=htcp
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+
+tc qdisc change dev ens33 root handle 1: netem loss 0.01% delay 20ms
+sysctl -w net.ipv4.tcp_congestion_control=cubic
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+sysctl -w net.ipv4.tcp_congestion_control=reno
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+sysctl -w net.ipv4.tcp_congestion_control=htcp
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+
+tc qdisc change dev ens33 root handle 1: netem loss 0.01% delay 30ms
+sysctl -w net.ipv4.tcp_congestion_control=cubic
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+sysctl -w net.ipv4.tcp_congestion_control=reno
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+sysctl -w net.ipv4.tcp_congestion_control=htcp
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+
+tc qdisc change dev ens33 root handle 1: netem loss 0.01% delay 40ms
+sysctl -w net.ipv4.tcp_congestion_control=cubic
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+sysctl -w net.ipv4.tcp_congestion_control=reno
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+sysctl -w net.ipv4.tcp_congestion_control=htcp
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+
+tc qdisc change dev ens33 root handle 1: netem loss 0.01% delay 50ms
+sysctl -w net.ipv4.tcp_congestion_control=cubic
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+sysctl -w net.ipv4.tcp_congestion_control=reno
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+sysctl -w net.ipv4.tcp_congestion_control=htcp
+ttcp -t 10.1.20.204
+ttcp -t 10.1.20.204
+----
+
+image:img/tcpnbspcongestion-contro.png[]
+
+[source, bash]
+.*Raw Data*
+----
+RTT,cubic,reno,htcp
+0,66.67,66.22,67.37
+10,21.02,18.67,19.79
+20,18.18,15.57,17.47
+30,16.62,13.08,14.37
+40,12.76,9.71,11.94
+50,9.48,7.47,9.10
+----
+
+
+
+
+
+
+
 
 
 == L4 Proxy/LB Device & Software
