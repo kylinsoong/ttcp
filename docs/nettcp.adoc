@@ -1131,8 +1131,6 @@ net.ipv4.tcp_timestamps = 1
 
 The value 1 indicates that timestamps are on, the value 0 indicates they are off.
 
-== Congestion Control
-
 === How congestion control algorithm impact on throughput?
 
 Firstly, the TCP congestion control terms as below.
@@ -1193,69 +1191,51 @@ set -x
 
 tc qdisc change dev ens33 root handle 1: netem loss 0.01% delay 0ms
 sysctl -w net.ipv4.tcp_congestion_control=cubic
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 sysctl -w net.ipv4.tcp_congestion_control=reno
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 sysctl -w net.ipv4.tcp_congestion_control=htcp
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 
 tc qdisc change dev ens33 root handle 1: netem loss 0.01% delay 10ms
 sysctl -w net.ipv4.tcp_congestion_control=cubic
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 sysctl -w net.ipv4.tcp_congestion_control=reno
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 sysctl -w net.ipv4.tcp_congestion_control=htcp
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 
 tc qdisc change dev ens33 root handle 1: netem loss 0.01% delay 20ms
 sysctl -w net.ipv4.tcp_congestion_control=cubic
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 sysctl -w net.ipv4.tcp_congestion_control=reno
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 sysctl -w net.ipv4.tcp_congestion_control=htcp
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 
 tc qdisc change dev ens33 root handle 1: netem loss 0.01% delay 30ms
 sysctl -w net.ipv4.tcp_congestion_control=cubic
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 sysctl -w net.ipv4.tcp_congestion_control=reno
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 sysctl -w net.ipv4.tcp_congestion_control=htcp
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 
 tc qdisc change dev ens33 root handle 1: netem loss 0.01% delay 40ms
 sysctl -w net.ipv4.tcp_congestion_control=cubic
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 sysctl -w net.ipv4.tcp_congestion_control=reno
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 sysctl -w net.ipv4.tcp_congestion_control=htcp
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 
 tc qdisc change dev ens33 root handle 1: netem loss 0.01% delay 50ms
 sysctl -w net.ipv4.tcp_congestion_control=cubic
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 sysctl -w net.ipv4.tcp_congestion_control=reno
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 sysctl -w net.ipv4.tcp_congestion_control=htcp
-ttcp -t 10.1.20.204
-ttcp -t 10.1.20.204
+for i in 1 2 3 ; do ttcp -t 10.1.20.204 ; done
 ----
 
 image:img/tcpnbspcongestion-contro.png[]
@@ -1272,8 +1252,9 @@ RTT,cubic,reno,htcp
 50,9.48,7.47,9.10
 ----
 
-
-
+* cubic has the better performance, especially in high latency environment.
+* TCP Congestion Control is for maximum use the network bandwidth even in high latency environment
+* The goal of congestion control is to determine how much capacity is available in the network, so that a source knows how many packets it can safely have in transit (inflight). 
 
 
 
