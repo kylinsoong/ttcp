@@ -59,7 +59,11 @@ struct sockaddr_storage frominet;
 int domain, fromlen;
 int fd;                         /* fd of network socket */
 int connfd;
-short port = 8877;              /* TCP port number */
+
+short port = 8805;
+short cport = 8806;               /* TCP port number */
+short inport = 9805; 
+
 char *host;                     /* ptr to name of host */
 short sPort = 0;                    /* TCP source port number */
 int server = 1;                 /* 0=client, 1=server */
@@ -71,12 +75,10 @@ extern char *optarg;
 
 char Usage[] = "\
 Usage: bancs -e [-options] <host of BANCS> \n\
-       bancs -b [-options] <host of CARD >\n\
-       bancs -c [-options] <host of BANCS >\n\
+       bancs -b [-options] <host of CARD>\n\
+       bancs -c [-options] <host of BANCS>\n\
 Common options:\n\
         -p ##   port number to send to or listen at (default 8805/8806 9805)\n\
-        -4      set IPv4 family for socket\n\
-        -6      set IPv6 family for socket\n\
 ";
 
 /* Socket */
@@ -123,30 +125,32 @@ int main(int argc, char **argv)
     memset(&sinhim, 0, sizeof(&sinhim));
     memset(&frominet, 0, sizeof(&frominet));
 
-    while ((c = getopt(argc, argv, "46cp:P:s")) != -1) {
+    while ((c = getopt(argc, argv, "ebcp:")) != -1) {
         switch (c) {
-        case 'c':
+        case 'e':
             server = 0;
             break;
-        case 's':
+        case 'b':
             server = 1;
             break;
-        case '4':
-            sinme.ss_family = AF_INET;
-            break;
-        case '6':
-            sinme.ss_family = AF_INET6;
+        case 'c':
+            server = 2;
             break;
         case 'p':
             port = atoi(optarg);
-            break;
-        case 'P':
-            sPort = atoi(optarg);
+            cport = port + 1;
+            inport = port + 1000; 
             break;
         default:
             goto usage;
         }
     }
+
+    host = argv[optind];
+
+   printf("mode: %d, port: %d, cport: %d, inport: %d, host: %s\n", server, port, cport, inport,  host);
+
+   exit(0);
 
     if(server == 0) {
         initiate = 1;
