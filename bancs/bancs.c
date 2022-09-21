@@ -65,7 +65,6 @@ short cport = 8806;               /* TCP port number */
 short inport = 9805; 
 
 char *host;                     /* ptr to name of host */
-short sPort = 0;                    /* TCP source port number */
 int server = 1;                 /* 0=client, 1=server */
 int initiate = 0;
 
@@ -146,7 +145,23 @@ int main(int argc, char **argv)
         }
     }
 
+    if (optind == argc) {
+            goto usage;
+    }
     host = argv[optind];
+
+    if(server == 0) {
+
+        out_sys("start");
+
+    } else if(server == 1) {
+
+        out_sys("start");
+
+    } else if(server == 2) {
+
+        out_sys("start");
+    }
 
    printf("mode: %d, port: %d, cport: %d, inport: %d, host: %s\n", server, port, cport, inport,  host);
 
@@ -188,19 +203,6 @@ int main(int argc, char **argv)
 
         sinme.ss_family = sinhim.ss_family;
 
-        if(sPort > 0) {
-            switch(sinme.ss_family) {
-            case AF_INET:
-                ((struct sockaddr_in *)&sinme)->sin_port = htons(sPort);
-                break;
-            case AF_INET6:
-                ((struct sockaddr_in6 *)&sinme)->sin6_port = htons(sPort);
-                break;
-            default:
-                break;
-            }
-        }
-
     } else {
         switch(sinme.ss_family) {
         case AF_INET:
@@ -219,12 +221,6 @@ int main(int argc, char **argv)
 
     fd = Socket(sinme.ss_family, SOCK_STREAM, 0);
     out_sys("socket");
-
-    if(!initiate || sPort > 0) {
-
-        Bind(fd, (struct sockaddr *)&sinme, sizeof(sinme));
-        out_sys("bind");
-    }
 
     if (initiate) {
 
@@ -360,8 +356,22 @@ void out_sys(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
+
+    char* role = "CLIENT";
+    if(server == 0)
+        role = "CLIENT";
+    else if (server == 1)
+        role = "BANCS";
+    else if (server == 2)
+        role = "CARD";
+
+    char cur_time[128];
+    struct tm*  ptm;
     time_t now = time(NULL);
-    printf("%ld %d echoS: %s\n", now, getpid(), fmt);
+    ptm = localtime(&now);
+    strftime(cur_time, 128, "%d-%b-%Y %H:%M:%S", ptm);
+
+    printf("%s (%d) %s: %s\n", cur_time, getpid(), role, fmt);
     va_end(ap);
 }
 
