@@ -40,27 +40,15 @@
 #include <errno.h>
 #include <signal.h>
 
-#define STR_DATTIME "daytime"
-#define STR_TIME    "time"
-#define STR_CHARGEN "chargen"
-#define STR_ENTER   "\n"
 
-#define ASCII_START 32
-#define ASCII_END   126
-#define MAXLINE     4096    /* max text line length */
-#define BUFSIZE     1024
 #define MAX_DATA_LINE 1024 * 8 + 16
 
 typedef void    Sigfunc(int);   /* for signal handlers */
 
-struct sockaddr_storage sinme;
-struct sockaddr_storage sinhim;
-struct sockaddr_storage frominet;
-
-struct sockaddr_storage esb_to_bancs, bancs_esb_ss, bancs_from_esb, bancs_card_ss, bancs_from_card, card_bancs_ss, card_from_bancs;
+struct sockaddr_storage esb_to_bancs, bancs_esb_ss, bancs_from_esb, bancs_card_ss, bancs_from_card, card_bancs_ss, card_from_bancs, bancs_to_card, card_to_bancs;
 
 int domain, fromlen, bancs_from_esb_len, bancs_from_card_len, card_from_bancs_len;
-int fd, fd_bancs;                 /* fd of network socket */
+int fd, fd_bancs, fd_to_card, fd_to_bancs;                 /* fd of network socket */
 int connfd, connfd_bancs;
 
 short port = 8805;
@@ -69,7 +57,6 @@ short inport = 9805;
 
 char *host;                     /* ptr to name of host */
 int server = 1;                 /* 0=client, 1=server */
-int initiate = 0;
 
 FILE * fp;
 char bufr[MAX_DATA_LINE];
@@ -104,7 +91,6 @@ void     out_sys(const char *, ...);
 char     *Fgets(char *, int, FILE *);
 void     Fputs(const char *, FILE *);
 char     *concat(const char *s1, const char *s2);
-char     *randstring(int size);
 
 pid_t    Fork(void);
 void     sig_chld(int);
@@ -118,8 +104,6 @@ ssize_t  readline(int, void *, size_t);
 ssize_t  my_read(int fd, char *ptr);
 
 /* Core logic entries*/
-void     Str_echo(int, const char *);
-void     Str_cli(FILE *, int);
 void     Str_puts(int);
 
 int main(int argc, char **argv) 
@@ -128,10 +112,6 @@ int main(int argc, char **argv)
     
     pid_t              childpid;
     int c;
-
-    memset(&sinme, 0, sizeof(&sinme));
-    memset(&sinhim, 0, sizeof(&sinhim));
-    memset(&frominet, 0, sizeof(&frominet));
 
     while ((c = getopt(argc, argv, "ebcp:")) != -1) {
         switch (c) {
@@ -161,7 +141,7 @@ int main(int argc, char **argv)
 
   if(server == 0) {
 
-    out_sys("Start");
+    out_sys("start");
 
     if((fp = fopen("/etc/bancs.data","r")) != NULL) {
       while(fgets(bufr, MAX_DATA_LINE, fp) != NULL) {
@@ -192,11 +172,12 @@ int main(int argc, char **argv)
     Connect(fd, (struct sockaddr *)&esb_to_bancs, sizeof(esb_to_bancs));
     out_sys(concat("connect to bancs ", host));
     Writen(fd, data, strlen(data));
-    out_sys("send data to bancs");
- 
+    out_sys("send message to bancs");
+    out_sys("exit"); 
+
   } else if(server == 1) {
 
-    out_sys("Start");
+    out_sys("start");
 
     Signal(SIGCHLD, sig_chld);
     int rc = fork();
@@ -213,18 +194,18 @@ int main(int argc, char **argv)
 
       ((struct sockaddr_in *)&bancs_card_ss)->sin_port = htons(port);
       fd_bancs = Socket(AF_INET, SOCK_STREAM, 0);
-      out_sys("Socket");
+      out_sys("socket");
 
       Bind(fd_bancs, (struct sockaddr *)&bancs_card_ss, sizeof(bancs_card_ss));
-      out_sys("Bind");
+      out_sys("bind");
 
       Listen(fd_bancs, 5);
-      out_sys("Listen");
+      out_sys("listen");
 
       for(;;) {
         connfd_bancs = Accept(fd_bancs, (struct sockaddr *)&bancs_from_card, &bancs_from_card_len);
         char *peer = Getpeername(connfd_bancs);
-        out_sys(concat("Accept from ", peer));
+        out_sys(concat("accept from ", peer));
 
         char    line[MAX_DATA_LINE];
         ssize_t n = Readline(connfd_bancs, line, MAX_DATA_LINE);
@@ -241,26 +222,43 @@ int main(int argc, char **argv)
 
   } else if(server == 2) {
 
-    out_sys("Start");
+    out_sys("start");
 
     memset(&card_bancs_ss, 0, sizeof(&card_bancs_ss));
     memset(&card_from_bancs, 0, sizeof(&card_from_bancs));
 
     ((struct sockaddr_in *)&card_bancs_ss)->sin_port = htons(cport);
     fd = Socket(AF_INET, SOCK_STREAM, 0);
-    out_sys("Socket");
+    out_sys("socket");
 
     Bind(fd, (struct sockaddr *)&card_bancs_ss, sizeof(card_bancs_ss));
-    out_sys("Bind");
+    out_sys("bind");
 
     Listen(fd, 5);
-    out_sys("Listen");
+    out_sys("listen");
 
+    connfd = Accept(fd, (struct sockaddr *)&card_from_bancs, &card_from_bancs_len);
+    char *peer = Getpeername(connfd);
+    out_sys(concat("accept from ", peer));
+
+    // connect to bancs
+    struct addrinfo *dest;
+    if(getaddrinfo(host, NULL, NULL, &dest)!=0)
+      err_sys("badhostname");
+
+    memset(&card_to_bancs, 0, sizeof(&card_to_bancs));
+    memcpy((void*)&card_to_bancs,(void*)dest->ai_addr, dest->ai_addrlen);
+
+    ((struct sockaddr_in *)&card_to_bancs)->sin_port = htons(port);
+
+    fd_to_bancs = Socket(AF_INET, SOCK_STREAM, 0);
+    out_sys("socket");
+
+    Connect(fd_to_bancs, (struct sockaddr *)&card_to_bancs, sizeof(card_to_bancs));
+    out_sys(concat("connect to card ", host));
+
+    // handle bancs request message
     for(;;) {
-      connfd = Accept(fd, (struct sockaddr *)&card_from_bancs, &card_from_bancs_len);
-      char *peer = Getpeername(connfd);
-      out_sys(concat("Accept from ", peer));
-
       char    line[MAX_DATA_LINE];
       ssize_t n = Readline(connfd, line, MAX_DATA_LINE);
       if(n < 0) {
@@ -270,103 +268,17 @@ int main(int argc, char **argv)
         return;
       }
 
-      out_sys(line);
+      Writen(fd_to_bancs, line, strlen(line));
+      out_sys("response message to bancs");
     }
 
   }
 
+  return 1;
 
-   err_sys("FORCE BREAK");
-
-    if(server == 0) {
-        initiate = 1;
-    }
-
-    if(initiate) {
-        struct addrinfo *dest;
-
-        if (optind == argc) {
-            goto usage;
-        }
-
-        bzero((char *)&sinhim, sizeof(sinhim));
-        host = argv[optind];
-
-        if(getaddrinfo(host, NULL, NULL, &dest)!=0) {
-            err_sys("badhostname");
-        }
-
-        memcpy((void*)&sinhim,(void*)dest->ai_addr, dest->ai_addrlen);
-
-        switch(sinhim.ss_family) {
-        case AF_INET:
-            ((struct sockaddr_in *)&sinhim)->sin_port = htons(port);
-                  /* free choice */
-            ((struct sockaddr_in *)&sinme)->sin_port = 0;
-            break;
-
-        case AF_INET6:
-            ((struct sockaddr_in6 *)&sinhim)->sin6_port = htons(port);
-                  /* free choice */
-            ((struct sockaddr_in6 *)&sinme)->sin6_port = 0;
-            break;
-        }
-
-        sinme.ss_family = sinhim.ss_family;
-
-    } else {
-        switch(sinme.ss_family) {
-        case AF_INET:
-            ((struct sockaddr_in *)&sinme)->sin_port = htons(port);
-            break;
-
-        case AF_INET6:
-            ((struct sockaddr_in6 *)&sinme)->sin6_port = htons(port);
-            break;
-
-        default:
-            out_sys( "must specify address family");
-            goto usage;
-        }
-    }
-
-    fd = Socket(sinme.ss_family, SOCK_STREAM, 0);
-    out_sys("socket");
-
-    if (initiate) {
-
-        Connect(fd, (struct sockaddr *)&sinhim, sizeof(sinhim));
-        out_sys("connect");
-        Str_cli(stdin, fd);
-
-    } else {
-
-        Listen(fd, 5);
-
-        Signal(SIGCHLD, sig_chld);
-
-        for(;;) {
-
-            connfd = Accept(fd, (struct sockaddr *)&frominet, &fromlen);
-
-            char *peer = Getpeername(connfd);
-            out_sys(concat("Accept from ", peer));
-
-            if ((childpid = Fork()) == 0) {
-                Close(fd); /* for address bad file descriptor */
-                Str_echo(connfd, peer);
-                exit(0);
-            }
-
-            Close(connfd);
-        }
-    }
-
-    return 1;
-
-    usage:
-        fprintf(stderr,Usage);
-        exit(1);
+  usage:
+    fprintf(stderr,Usage);
+    exit(1);
 }
 
 /**
@@ -374,25 +286,40 @@ int main(int argc, char **argv)
  */
 void InboundHandler() {
 
-  out_sys("Inbound handler start");
+  out_sys("inbound handler start");
+  
+  struct addrinfo *dest;
+  if(getaddrinfo(host, NULL, NULL, &dest)!=0)
+    err_sys("badhostname");
+
+  memset(&bancs_to_card, 0, sizeof(&bancs_to_card));
+  memcpy((void*)&bancs_to_card,(void*)dest->ai_addr, dest->ai_addrlen);
+
+  ((struct sockaddr_in *)&bancs_to_card)->sin_port = htons(cport);
+
+  fd_to_card = Socket(AF_INET, SOCK_STREAM, 0);
+  out_sys("socket");
+
+  Connect(fd_to_card, (struct sockaddr *)&bancs_to_card, sizeof(bancs_to_card));
+  out_sys(concat("connect to card ", host));
 
   memset(&bancs_esb_ss, 0, sizeof(&bancs_esb_ss));
   memset(&bancs_from_esb, 0, sizeof(&bancs_from_esb));
 
   ((struct sockaddr_in *)&bancs_esb_ss)->sin_port = htons(inport);
   fd = Socket(AF_INET, SOCK_STREAM, 0);
-  out_sys("Inbound handler socket");
+  out_sys("inbound handler socket");
 
   Bind(fd, (struct sockaddr *)&bancs_esb_ss, sizeof(bancs_esb_ss));
-  out_sys("Inbound handler bind");
+  out_sys("inbound handler bind");
 
   Listen(fd, 5);
-  out_sys("Inbound handler listen");
+  out_sys("inbound handler listen");
 
   for(;;) {
     connfd = Accept(fd, (struct sockaddr *)&bancs_from_esb, &bancs_from_esb_len);
     char *peer = Getpeername(connfd);
-    out_sys(concat("Accept from ", peer));
+    out_sys(concat("inbound message from ", peer));
 
     char    line[MAX_DATA_LINE];
     ssize_t n = Readline(connfd, line, MAX_DATA_LINE);
@@ -403,13 +330,12 @@ void InboundHandler() {
       return;
     }
 
-    out_sys(line);
+    Writen(fd_to_card, line, strlen(line));
+    out_sys("request message to card");
+
+    Close(connfd);
   }
 }
-
-
-
-
 
 int Socket(int family, int type, int protocol)
 {
@@ -559,16 +485,6 @@ char *concat(const char *s1, const char *s2)
     return result;
 }
 
-char *randstring(int size)
-{
-    int i;
-    char *res = malloc(size + 1);
-    for(i = 0; i < size; i++) {
-        res[i] = (char) (rand() % (ASCII_END - ASCII_START)) + ASCII_START;
-    }
-    res[i] = '\0';
-    return res;
-}
 
 void sig_chld(int signo)
 {
@@ -645,7 +561,7 @@ ssize_t readline(int fd, void *vptr, size_t maxlen)
 {
     ssize_t n, rc;
     char    c, *ptr;
-    char    read_buf[MAXLINE];
+    char    read_buf[MAX_DATA_LINE];
 
     ptr = vptr;
     for (n = 1; n < maxlen; n++) {
@@ -670,7 +586,7 @@ ssize_t my_read(int fd, char *ptr)
 
     int      read_cnt;
     char     *read_ptr;
-    char     read_buf[MAXLINE];
+    char     read_buf[MAX_DATA_LINE];
 
     if (read_cnt <= 0) {
         again:
@@ -689,69 +605,11 @@ ssize_t my_read(int fd, char *ptr)
     return(1);
 }
 
-
-void Str_echo(int connfd, const char *peer)
-{
-    ssize_t         n;
-    char            line[MAXLINE], sendBuff[BUFSIZE];
-    time_t          ticks;
-
-    out_sys(concat("server ready, peer: ", peer));
-
-    for(;;) {
-
-        n = Readline(connfd, line, MAXLINE);
-
-        if(n < 0) {
-            err_sys("read");
-        } else if (n == 0) {
-            out_sys(concat("connection closed by ", peer));
-            return;
-        }
-
-        if(strcmp(line, concat(STR_DATTIME, STR_ENTER)) == 0) {
-            ticks = time(NULL);
-            snprintf(sendBuff, sizeof(sendBuff), "%.24s\r\n", ctime(&ticks));
-            write(connfd, sendBuff, strlen(sendBuff));
-        } else if(strcmp(line, concat(STR_TIME, STR_ENTER)) == 0) {
-            time_t now = time(0);
-            sprintf (sendBuff, "%lu\n" , now);
-            write(connfd, sendBuff, strlen(sendBuff));
-        } else if (strcmp(line, concat(STR_CHARGEN, STR_ENTER)) == 0) {
-            for(;;) {
-                snprintf(sendBuff, sizeof(sendBuff), "%s\n", randstring(999));
-                write(connfd, sendBuff, strlen(sendBuff));
-                sleep(1);
-            }
-        } else{
-            Writen(connfd, line, n);
-        }
-    }
-}
-
-void Str_cli(FILE *fp, int sockfd)
-{
-    char sendline[MAXLINE];
-
-    while (Fgets(sendline, MAXLINE, fp) != NULL) {
-
-        Writen(sockfd, sendline, strlen(sendline));
-
-        if (strcmp(sendline, concat(STR_CHARGEN, STR_ENTER)) == 0) {
-            for(;;) {
-                Str_puts(sockfd);
-            }
-        }
-
-        Str_puts(sockfd);
-    }
-}
-
 void Str_puts(int sockfd)
 {
-    char recvline[MAXLINE];
+    char recvline[MAX_DATA_LINE];
 
-    if (Readline(sockfd, recvline, MAXLINE) == 0)
+    if (Readline(sockfd, recvline, MAX_DATA_LINE) == 0)
         err_sys("server terminated prematurely");
     
     Fputs(recvline, stdout);
