@@ -49,6 +49,7 @@
 #define ASCII_END   126
 #define MAXLINE     4096    /* max text line length */
 #define BUFSIZE     1024
+#define MAX_DATA_LINE 1024 * 8 + 16
 
 typedef void    Sigfunc(int);   /* for signal handlers */
 
@@ -56,9 +57,11 @@ struct sockaddr_storage sinme;
 struct sockaddr_storage sinhim;
 struct sockaddr_storage frominet;
 
-int domain, fromlen;
-int fd;                         /* fd of network socket */
-int connfd;
+struct sockaddr_storage esb_to_bancs, bancs_esb_ss, bancs_from_esb, bancs_card_ss, bancs_from_card, card_bancs_ss, card_from_bancs;
+
+int domain, fromlen, bancs_from_esb_len, bancs_from_card_len, card_from_bancs_len;
+int fd, fd_bancs;                 /* fd of network socket */
+int connfd, connfd_bancs;
 
 short port = 8805;
 short cport = 8806;               /* TCP port number */
@@ -67,6 +70,10 @@ short inport = 9805;
 char *host;                     /* ptr to name of host */
 int server = 1;                 /* 0=client, 1=server */
 int initiate = 0;
+
+FILE * fp;
+char bufr[MAX_DATA_LINE];
+char *data;
 
 extern int errno;
 extern int optind;
@@ -87,6 +94,8 @@ void     Listen(int, int);
 int      Accept(int, struct sockaddr *, socklen_t *);
 void     Connect(int, const struct sockaddr *, socklen_t);
 char     *Getpeername(int);
+
+void     InboundHandler(void);
 
 /* IO */
 void     Close(int);
@@ -150,22 +159,124 @@ int main(int argc, char **argv)
     }
     host = argv[optind];
 
-    if(server == 0) {
+  if(server == 0) {
 
-        out_sys("start");
+    out_sys("Start");
 
-    } else if(server == 1) {
+    if((fp = fopen("/etc/bancs.data","r")) != NULL) {
+      while(fgets(bufr, MAX_DATA_LINE, fp) != NULL) {
+        if (strncmp("#", bufr, strlen("#")) == 0 || strlen(bufr) < 3) 
+          continue;
 
-        out_sys("start");
+          char *key = strtok(bufr, "=");
+          data = strtok(NULL, "=");
+          key = strtok(key, "\r\t\n ");
+          data = strtok(data, "\r\t\n ");
 
-    } else if(server == 2) {
-
-        out_sys("start");
+          if(data ==  NULL) 
+            err_sys("data is null");
+      }
     }
 
-   printf("mode: %d, port: %d, cport: %d, inport: %d, host: %s\n", server, port, cport, inport,  host);
+    struct addrinfo *dest;
+    if(getaddrinfo(host, NULL, NULL, &dest)!=0) 
+      err_sys("badhostname");
+   
+    memset(&esb_to_bancs, 0, sizeof(&esb_to_bancs));
+    memcpy((void*)&esb_to_bancs,(void*)dest->ai_addr, dest->ai_addrlen);
+    ((struct sockaddr_in *)&esb_to_bancs)->sin_port = htons(inport);
 
-   exit(0);
+    fd = Socket(AF_INET, SOCK_STREAM, 0);
+    out_sys("socket");
+
+    Connect(fd, (struct sockaddr *)&esb_to_bancs, sizeof(esb_to_bancs));
+    out_sys(concat("connect to bancs ", host));
+    Writen(fd, data, strlen(data));
+    out_sys("send data to bancs");
+ 
+  } else if(server == 1) {
+
+    out_sys("Start");
+
+    Signal(SIGCHLD, sig_chld);
+    int rc = fork();
+    if (rc < 0 ) {
+      err_sys("Error:unable to create thread");
+    } else if ( rc == 0) {
+      InboundHandler();
+    } else {
+
+      out_sys("create inbound handler");
+
+      memset(&bancs_card_ss, 0, sizeof(&bancs_card_ss));
+      memset(&bancs_from_card, 0, sizeof(&bancs_from_card));
+
+      ((struct sockaddr_in *)&bancs_card_ss)->sin_port = htons(port);
+      fd_bancs = Socket(AF_INET, SOCK_STREAM, 0);
+      out_sys("Socket");
+
+      Bind(fd_bancs, (struct sockaddr *)&bancs_card_ss, sizeof(bancs_card_ss));
+      out_sys("Bind");
+
+      Listen(fd_bancs, 5);
+      out_sys("Listen");
+
+      for(;;) {
+        connfd_bancs = Accept(fd_bancs, (struct sockaddr *)&bancs_from_card, &bancs_from_card_len);
+        char *peer = Getpeername(connfd_bancs);
+        out_sys(concat("Accept from ", peer));
+
+        char    line[MAX_DATA_LINE];
+        ssize_t n = Readline(connfd_bancs, line, MAX_DATA_LINE);
+        if(n < 0) {
+          err_sys("read");
+        } else if (n == 0) {
+          out_sys(concat("connection closed by ", peer));
+          return;
+        }
+
+        out_sys(line);
+      }
+    } 
+
+  } else if(server == 2) {
+
+    out_sys("Start");
+
+    memset(&card_bancs_ss, 0, sizeof(&card_bancs_ss));
+    memset(&card_from_bancs, 0, sizeof(&card_from_bancs));
+
+    ((struct sockaddr_in *)&card_bancs_ss)->sin_port = htons(cport);
+    fd = Socket(AF_INET, SOCK_STREAM, 0);
+    out_sys("Socket");
+
+    Bind(fd, (struct sockaddr *)&card_bancs_ss, sizeof(card_bancs_ss));
+    out_sys("Bind");
+
+    Listen(fd, 5);
+    out_sys("Listen");
+
+    for(;;) {
+      connfd = Accept(fd, (struct sockaddr *)&card_from_bancs, &card_from_bancs_len);
+      char *peer = Getpeername(connfd);
+      out_sys(concat("Accept from ", peer));
+
+      char    line[MAX_DATA_LINE];
+      ssize_t n = Readline(connfd, line, MAX_DATA_LINE);
+      if(n < 0) {
+        err_sys("read");
+      } else if (n == 0) {
+        out_sys(concat("connection closed by ", peer));
+        return;
+      }
+
+      out_sys(line);
+    }
+
+  }
+
+
+   err_sys("FORCE BREAK");
 
     if(server == 0) {
         initiate = 1;
@@ -239,7 +350,7 @@ int main(int argc, char **argv)
             connfd = Accept(fd, (struct sockaddr *)&frominet, &fromlen);
 
             char *peer = Getpeername(connfd);
-            out_sys(concat("accept from ", peer));
+            out_sys(concat("Accept from ", peer));
 
             if ((childpid = Fork()) == 0) {
                 Close(fd); /* for address bad file descriptor */
@@ -257,6 +368,48 @@ int main(int argc, char **argv)
         fprintf(stderr,Usage);
         exit(1);
 }
+
+/**
+ * Handle the client request 
+ */
+void InboundHandler() {
+
+  out_sys("Inbound handler start");
+
+  memset(&bancs_esb_ss, 0, sizeof(&bancs_esb_ss));
+  memset(&bancs_from_esb, 0, sizeof(&bancs_from_esb));
+
+  ((struct sockaddr_in *)&bancs_esb_ss)->sin_port = htons(inport);
+  fd = Socket(AF_INET, SOCK_STREAM, 0);
+  out_sys("Inbound handler socket");
+
+  Bind(fd, (struct sockaddr *)&bancs_esb_ss, sizeof(bancs_esb_ss));
+  out_sys("Inbound handler bind");
+
+  Listen(fd, 5);
+  out_sys("Inbound handler listen");
+
+  for(;;) {
+    connfd = Accept(fd, (struct sockaddr *)&bancs_from_esb, &bancs_from_esb_len);
+    char *peer = Getpeername(connfd);
+    out_sys(concat("Accept from ", peer));
+
+    char    line[MAX_DATA_LINE];
+    ssize_t n = Readline(connfd, line, MAX_DATA_LINE);
+    if(n < 0) {
+      err_sys("read");
+    } else if (n == 0) {
+      out_sys(concat("connection closed by ", peer));
+      return;
+    }
+
+    out_sys(line);
+  }
+}
+
+
+
+
 
 int Socket(int family, int type, int protocol)
 {
@@ -342,14 +495,21 @@ void Close(int fd)
 void err_sys(const char *fmt, ...)
 {
     va_list ap;
-
     va_start(ap, fmt);
-    fprintf(stderr,"echoS: ");
-    perror(fmt);
-    fprintf(stderr,"errno=%d\n",errno);
+
+    char* role = "CLIENT";
+    if(server == 0)
+        role = "CLIENT";
+    else if (server == 1)
+        role = "BANCS";
+    else if (server == 2)
+        role = "CARD";
+
+    //perror(fmt);
+    fprintf(stderr,"%s error, errno=%d, msg=%s\n", role, errno, fmt);
     va_end(ap);
 
-    exit(1);
+    exit(0);
 }
 
 void out_sys(const char *fmt, ...)
