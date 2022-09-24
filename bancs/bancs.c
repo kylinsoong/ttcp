@@ -199,38 +199,44 @@ int main(int argc, char **argv)
       InboundHandler();
     } else {
 
-     sleep(lazy);      
+       sleep(lazy);      
 
-      memset(&bancs_card_ss, 0, sizeof(&bancs_card_ss));
-      memset(&bancs_from_card, 0, sizeof(&bancs_from_card));
+       // Standard Sock wait for CARD to connect,
+       // and handle CARD's response message
+       memset(&bancs_card_ss, 0, sizeof(&bancs_card_ss));
+       memset(&bancs_from_card, 0, sizeof(&bancs_from_card));
+       
+       ((struct sockaddr_in *)&bancs_card_ss)->sin_port = htons(port);
+       fd_bancs = Socket(AF_INET, SOCK_STREAM, 0);
+       out_sys("socket");
 
-      ((struct sockaddr_in *)&bancs_card_ss)->sin_port = htons(port);
-      fd_bancs = Socket(AF_INET, SOCK_STREAM, 0);
-      out_sys("socket");
+       Bind(fd_bancs, (struct sockaddr *)&bancs_card_ss, sizeof(bancs_card_ss));
+       out_sys("bind");
 
-      Bind(fd_bancs, (struct sockaddr *)&bancs_card_ss, sizeof(bancs_card_ss));
-      out_sys("bind");
+       Listen(fd_bancs, 5);
+       out_sys("listen");
 
-      Listen(fd_bancs, 5);
-      out_sys("listen");
+       connfd_bancs = Accept(fd_bancs, (struct sockaddr *)&bancs_from_card, &bancs_from_card_len);
+       char *peer = Getpeername(connfd_bancs);
+       out_sys(concat("from card: ", peer));
 
-      for(;;) {
-        connfd_bancs = Accept(fd_bancs, (struct sockaddr *)&bancs_from_card, &bancs_from_card_len);
-        char *peer = Getpeername(connfd_bancs);
-        out_sys(concat("from card: ", peer));
+       // Handle CARD system's response message;
+       // Repeatedly extract the message
+       // Current handling mechanism is only output the response message to log.
+       for(;;) {
+          char    line[MAX_DATA_LINE];
+          ssize_t n = Readline(connfd_bancs, line, buflen);
+          if(n < 0) {
+              err_sys("read");
+          } else if (n == 0) {
+              out_sys(concat("connection closed by ", peer));
+              return;
+          }
 
-        char    line[MAX_DATA_LINE];
-        ssize_t n = Readline(connfd_bancs, line, buflen);
-        if(n < 0) {
-          err_sys("read");
-        } else if (n == 0) {
-          out_sys(concat("connection closed by ", peer));
-          return;
+          out_sys("response message from CARD");
+          out_sys(line);
         }
-
-        out_sys(line);
-      }
-    } 
+     } 
 
   } else if(server == 2) {
 
