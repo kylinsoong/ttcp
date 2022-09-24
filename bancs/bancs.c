@@ -569,7 +569,6 @@ ssize_t Readline(int fd, void *ptr, size_t maxlen)
 
     if ( (n = readline(fd, ptr, maxlen)) < 0)
         err_sys("readline");
-
     return (n);
 }
 
@@ -580,7 +579,7 @@ ssize_t readline(int fd, void *vptr, size_t maxlen)
     char    read_buf[MAX_DATA_LINE];
 
     ptr = vptr;
-    for (n = 1; n < maxlen; n++) {
+    for (n = 0; n < maxlen; n++) {
         if ( (rc = my_read(fd, &c)) == 1) {
             *ptr++ = c;
             if (c == '\n')
