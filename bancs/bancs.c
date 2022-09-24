@@ -233,8 +233,7 @@ int main(int argc, char **argv)
               return;
           }
 
-          out_sys("response message from CARD");
-          out_sys(line);
+          out_sys(concat("response message from card, message: ", line));
         }
      } 
 
@@ -287,10 +286,11 @@ int main(int argc, char **argv)
         out_sys(concat("connection closed by ", peer));
         return;
       }
+   
+      out_sys(concat("receive request message from bancs: ", line));
 
       Writen(fd_to_bancs, line, strlen(line));
-      out_sys("response message to bancs");
-      out_sys(concat("message: ", line));   
+      out_sys(concat("response message to bancs, message: ", line));   
     }
 
   }
@@ -339,8 +339,8 @@ void InboundHandler() {
 
   for(;;) {
     connfd = Accept(fd, (struct sockaddr *)&bancs_from_esb, &bancs_from_esb_len);
+
     char *peer = Getpeername(connfd);
-    out_sys(concat("inbound message from ", peer));
 
     char    line[buflen];
     ssize_t n = Readline(connfd, line, buflen);
@@ -352,8 +352,10 @@ void InboundHandler() {
     }
 
     Writen(fd_to_card, line, strlen(line));
-    out_sys("request message to card");
-    out_sys(concat("message: ", line));
+
+    char *inpeer = concat("inbound message from ", peer);
+    char *msgpre = concat(inpeer, ", request message to card, message: ");
+    out_sys(concat(msgpre, line));
 
     Close(connfd);
   }
