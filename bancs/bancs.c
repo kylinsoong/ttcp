@@ -41,7 +41,7 @@
 #include <signal.h>
 
 
-#define MAX_DATA_LINE 1024 * 8 + 16
+#define MAX_DATA_LINE 4096
 
 typedef void    Sigfunc(int);   /* for signal handlers */
 
@@ -50,6 +50,9 @@ struct sockaddr_storage esb_to_bancs, bancs_esb_ss, bancs_from_esb, bancs_card_s
 int domain, fromlen, bancs_from_esb_len, bancs_from_card_len, card_from_bancs_len;
 int fd, fd_bancs, fd_to_card, fd_to_bancs;                 /* fd of network socket */
 int connfd, connfd_bancs;
+
+int buflen = 0;
+int lazy = 2;
 
 short port = 8805;
 short cport = 8806;               /* TCP port number */
@@ -71,6 +74,7 @@ Usage: bancs -e [-options] <host of BANCS> \n\
        bancs -b [-options] <host of CARD>\n\
        bancs -c [-options] <host of BANCS>\n\
 Common options:\n\
+        -l ##   specify the message length\n\
         -p ##   port number to send to or listen at (default 8805/8806 9805)\n\
 ";
 
@@ -113,7 +117,7 @@ int main(int argc, char **argv)
     pid_t              childpid;
     int c;
 
-    while ((c = getopt(argc, argv, "ebcp:")) != -1) {
+    while ((c = getopt(argc, argv, "ebcl:p:")) != -1) {
         switch (c) {
         case 'e':
             server = 0;
@@ -129,13 +133,20 @@ int main(int argc, char **argv)
             cport = port + 1;
             inport = port + 1000; 
             break;
+        case 'l':
+            buflen = atoi(optarg);
+            break;
         default:
             goto usage;
         }
     }
 
+    if (buflen <= 0) {
+        goto usage;
+    }
+
     if (optind == argc) {
-            goto usage;
+        goto usage;
     }
     host = argv[optind];
 
@@ -173,6 +184,7 @@ int main(int argc, char **argv)
     out_sys(concat("connect to bancs ", host));
     Writen(fd, data, strlen(data));
     out_sys("send message to bancs");
+    out_sys(concat("message: ", data)); 
     out_sys("exit"); 
 
   } else if(server == 1) {
@@ -187,7 +199,7 @@ int main(int argc, char **argv)
       InboundHandler();
     } else {
 
-      out_sys("create inbound handler");
+     sleep(lazy);      
 
       memset(&bancs_card_ss, 0, sizeof(&bancs_card_ss));
       memset(&bancs_from_card, 0, sizeof(&bancs_from_card));
@@ -205,10 +217,10 @@ int main(int argc, char **argv)
       for(;;) {
         connfd_bancs = Accept(fd_bancs, (struct sockaddr *)&bancs_from_card, &bancs_from_card_len);
         char *peer = Getpeername(connfd_bancs);
-        out_sys(concat("accept from ", peer));
+        out_sys(concat("from card: ", peer));
 
         char    line[MAX_DATA_LINE];
-        ssize_t n = Readline(connfd_bancs, line, MAX_DATA_LINE);
+        ssize_t n = Readline(connfd_bancs, line, buflen);
         if(n < 0) {
           err_sys("read");
         } else if (n == 0) {
@@ -239,7 +251,9 @@ int main(int argc, char **argv)
 
     connfd = Accept(fd, (struct sockaddr *)&card_from_bancs, &card_from_bancs_len);
     char *peer = Getpeername(connfd);
-    out_sys(concat("accept from ", peer));
+    out_sys(concat("from bancs ", peer));
+
+    sleep(lazy);   
 
     // connect to bancs
     struct addrinfo *dest;
@@ -255,12 +269,12 @@ int main(int argc, char **argv)
     out_sys("socket");
 
     Connect(fd_to_bancs, (struct sockaddr *)&card_to_bancs, sizeof(card_to_bancs));
-    out_sys(concat("connect to card ", host));
+    out_sys(concat("connect to bancs ", host));
 
     // handle bancs request message
     for(;;) {
-      char    line[MAX_DATA_LINE];
-      ssize_t n = Readline(connfd, line, MAX_DATA_LINE);
+      char    line[buflen];
+      ssize_t n = Readline(connfd, line, buflen);
       if(n < 0) {
         err_sys("read");
       } else if (n == 0) {
@@ -270,6 +284,7 @@ int main(int argc, char **argv)
 
       Writen(fd_to_bancs, line, strlen(line));
       out_sys("response message to bancs");
+      out_sys(concat("message: ", line));   
     }
 
   }
@@ -321,8 +336,8 @@ void InboundHandler() {
     char *peer = Getpeername(connfd);
     out_sys(concat("inbound message from ", peer));
 
-    char    line[MAX_DATA_LINE];
-    ssize_t n = Readline(connfd, line, MAX_DATA_LINE);
+    char    line[buflen];
+    ssize_t n = Readline(connfd, line, buflen);
     if(n < 0) {
       err_sys("read");
     } else if (n == 0) {
@@ -332,6 +347,7 @@ void InboundHandler() {
 
     Writen(fd_to_card, line, strlen(line));
     out_sys("request message to card");
+    out_sys(concat("message: ", line));
 
     Close(connfd);
   }
