@@ -113,10 +113,36 @@ void     Str_puts(int);
 int main(int argc, char **argv) 
 {
     if (argc < 2) goto usage;
-    
-    pid_t              childpid;
-    int c;
 
+    // load bancs message from /etc/bancs.data
+    if((fp = fopen("/etc/bancs.data","r")) != NULL) {
+      while(fgets(bufr, MAX_DATA_LINE, fp) != NULL) {
+        if (strncmp("#", bufr, strlen("#")) == 0 || strlen(bufr) < 3)
+          continue;
+
+          char *key = strtok(bufr, "=");
+          char *val = strtok(NULL, "=");
+          key = strtok(key, "\r\t\n ");
+          val = strtok(val, "\r\t\n ");
+          //printf("key: %s, value: %s\n", key, val);
+
+          if(val ==  NULL) {
+            continue;
+          }
+
+          if (strcmp(key, "DATA") == 0 && strlen(val) > 5) {
+              char result[MAX_DATA_LINE];
+              strcpy(result, val);
+              data = result;
+              buflen = strlen(data);
+          } else if (strcmp(key, "PLACE_HOLDER") == 0 && strlen(val) > 5) {
+              // TODO
+          }
+      }
+    }
+
+    // parse the main argv
+    int c;
     while ((c = getopt(argc, argv, "ebcl:p:")) != -1) {
         switch (c) {
         case 'e':
@@ -134,7 +160,9 @@ int main(int argc, char **argv)
             inport = port + 1000; 
             break;
         case 'l':
-            buflen = atoi(optarg);
+            if (buflen <= 0) {
+                buflen = atoi(optarg);
+            }
             break;
         default:
             goto usage;
@@ -153,21 +181,6 @@ int main(int argc, char **argv)
   if(server == 0) {
 
     out_sys("start");
-
-    if((fp = fopen("/etc/bancs.data","r")) != NULL) {
-      while(fgets(bufr, MAX_DATA_LINE, fp) != NULL) {
-        if (strncmp("#", bufr, strlen("#")) == 0 || strlen(bufr) < 3) 
-          continue;
-
-          char *key = strtok(bufr, "=");
-          data = strtok(NULL, "=");
-          key = strtok(key, "\r\t\n ");
-          data = strtok(data, "\r\t\n ");
-
-          if(data ==  NULL) 
-            err_sys("data is null");
-      }
-    }
 
     struct addrinfo *dest;
     if(getaddrinfo(host, NULL, NULL, &dest)!=0) 
