@@ -18,8 +18,10 @@ mkdir $NAME-$VERSION
 cp -r echoS $NAME-$VERSION 
 cp -r chat  $NAME-$VERSION 
 cp -r ttcp  $NAME-$VERSION 
+cp -r bancs  $NAME-$VERSION 
 
 cp ttcp.conf $NAME-$VERSION
+cp bancs/bancs.data $NAME-$VERSION
 
 cp Makefile $NAME-$VERSION
 

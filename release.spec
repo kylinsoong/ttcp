@@ -1,5 +1,5 @@
 Name:           ttcp
-Version:        1.12
+Version:        1.13
 Release:        1
 Summary:        Test TCP.
 
@@ -26,9 +26,13 @@ make %{?_smp_mflags}
 %{_bindir}/chat
 %{_bindir}/echoS
 %{_bindir}/ttcp
+%{_bindir}/bancs
 /etc/ttcp.conf
+/etc/bancs.data
 
 %changelog
+* Sun Sep 25 2022 Kylin Soong <kylinsoong.1214@gmail.com> - 1.13-1
+- add core banking bancs card demostration project
 * Mon Apr 24 2022 Kylin Soong <kylinsoong.1214@gmail.com> - 1.12-1
 - use the sub project ttcp as release name
 - add ttcp.conf for holding global configs

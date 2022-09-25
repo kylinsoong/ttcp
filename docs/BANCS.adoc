@@ -1,0 +1,98 @@
+= BANCS
+
+== Install and Run
+
+[source, bash]
+.*Install on x86*
+----
+rpm -ivh ttcp-1.13-1.x86_64.rpm
+----
+
+[source, bash]
+.*List installed files*
+----
+~]# rpm -ql ttcp
+/etc/bancs.data
+/etc/ttcp.conf
+/usr/bin/bancs
+/usr/bin/chat
+/usr/bin/echoS
+/usr/bin/ttcp
+----
+
+=== 1:1 on 2 x86
+
+There are 2 x86 servers on for BANCS, another for CARD, use default ports pair(8805/8806). 
+
+[source, bash]
+.*1. Start CARD*
+----
+bancs -c 10.1.20.203
+----
+
+[source, bash]
+.*2. Start BANCS*
+----
+bancs -b 10.1.10.205
+----
+
+NOTE: `10.1.10.205` is the host to run CARD, `10.1.20.203` is the host to run BANCS.
+
+[source, bash]
+.*3. verify setring up*
+----
+// process on BANCS
+~]# ps -ef | grep bancs
+root       1621   1557  0 11:00 pts/0    00:00:00 bancs -b 10.1.10.205
+root       1622   1621  0 11:00 pts/0    00:00:00 bancs -b 10.1.10.205
+
+// tcp connections on BANCS
+~]# netstat -antulop | grep bancs
+tcp        0      0 0.0.0.0:8805            0.0.0.0:*               LISTEN      1621/bancs           off (0.00/0/0)
+tcp        0      0 0.0.0.0:9805            0.0.0.0:*               LISTEN      1622/bancs           off (0.00/0/0)
+tcp        0      0 10.1.20.203:8805        10.1.20.1:50665         ESTABLISHED 1621/bancs           off (0.00/0/0)
+tcp        0      0 10.1.20.203:37820       10.1.10.205:8806        ESTABLISHED 1622/bancs           off (0.00/0/0)
+
+// process on CARD
+~]# ps -ef | grep bancs
+root       3846   1227  0 10:59 pts/1    00:00:00 bancs -c 10.1.20.203
+
+// tcp connections on CARD
+~]# netstat -antulop | grep bancs
+tcp        0      0 0.0.0.0:8806            0.0.0.0:*               LISTEN      3846/bancs           off (0.00/0/0)
+tcp        0      0 10.1.10.205:56124       10.1.20.203:8805        ESTABLISHED 3846/bancs           off (0.00/0/0)
+tcp        0      0 10.1.10.205:8806        10.1.10.1:50659         ESTABLISHED 3846/bancs           off (0.00/0/0)
+----
+
+[source, bash]
+.*4. Test*
+----
+// send a message to BANCS which simulate a banks transaction from channel system like Mobile Bank app.
+~]# bancs -e 10.1.20.203
+25-Sep-2022 11:11:45 (3876) CLIENT: connect to bancs 10.1.20.203
+25-Sep-2022 11:11:45 (3876) CLIENT: send message to bancs
+25-Sep-2022 11:11:45 (3876) CLIENT: message: 2d313131363030303030313737303032343136393638..
+25-Sep-2022 11:11:45 (3876) CLIENT: exit
+
+// BANCS handle banks transaction, send request message to CARD
+25-Sep-2022 11:11:45 (1622) BANCS: inbound message from 10.1.20.1:51280, request message to card, message: 2d31313136303030303031373730303234313639363..
+
+// CARD process, and send response message to BANCS
+25-Sep-2022 11:11:45 (3846) CARD: receive request message from bancs: 2d313131363030303030313737303032343136393638303937303030303...
+25-Sep-2022 11:11:45 (3846) CARD: response message to bancs, message: 2d313131363030303030313737303032343136393638303937303030303...
+
+// BANCS receive response from CARD
+25-Sep-2022 11:11:45 (1621) BANCS: response message from card, message: 2d31313136303030303031373730303234313639363830393730303030303030...
+----
+
+[source, bash]
+.**
+----
+
+----
+
+[source, bash]
+.**
+----
+
+----
