@@ -248,3 +248,57 @@ create ltm virtual VS_BANCS_TO_CARD { destination 10.1.10.31:8806 ip-protocol tc
 ----
 create ltm virtual VS_BANCS_FROM_CARD { destination 10.1.10.31:8805 ip-protocol tcp pool POOL_BANCS_FROM_CARD profiles add { protocol_bancs_card { } router_BANCS_FROM_CARD { } tcp-bancs { } } rules { IRULES_BANCS_FROM_CARD } } 
 ----
+
+=== iRule
+
+==== New Connections
+
+When a new connection is created, the iRule will need to set the peer name for the connection.
+
+Each message will automatically have the source-address field populated with this peer name. A dynamic route will be entered for this connection with the assigned peer name used as the destination-address of the route. If a route already exists with the peer name, the earlier route will take precedence.
+
+==== Message Creation
+
+The data stream will need to be parsed during CLIENT_DATA and SERVER_DATA iRule events for messages. Once the bytes of a message has been collected, a message object will need to be created and populated.
+
+The GENERICMESSAGE::message create command is used to create and populate a message.
+
+Once a message is created, the GENERICMESSAGE_INGRESS event will be raised and the script author may modify and the message.
+
+Upon completion of the GENERMESSAGE_INGRESS event, the message will be forwarded to the router for routing.
+
+==== Message Routing
+
+When a message is received for routing, MRF will raise the MR_INGRESS event. The script author may set the nexthop or route attribute of the message to bypass the normal route table lookup. Response messages may already have the nexthop attribute set but the protocol if a pending request existed in the table.
+
+Upon completion of the MR_INGRESS event, fi the message's nexthop attribute is set, the message will be forwarded to the connection specified in the nexthop attribute.
+
+* If the message's route attribute is set, route lookup will be skipped and the route value specified in the message's route attribute will be use to determine the distination host of for the message.
+* If the message's route attribute is not set, the route lookup will be performed using the message's source and destination address. The message's route attribute will be populated with the selected route's value.
+
+After route selection, a peer from the route value will be selected and a pool member will be selected from the selected peer.
+
+* If available connection exists to the selected pool member, the message will be forwarded using that connection.
+* If an available connection does not exist, a new connection will be created.
+
+The MR_EGRESS event will be raised as the message is leaving the router to be forwarded to the destination.
+
+If a route could not be found or a connection could not be created, a MR_FAILED event will be raised. The script author may attempt to retry routing using the MR::retry command.
+
+==== Message Delivery
+
+When the outgoing message is received by the protocol a GENERICMESSAGE_EGRESS event will be raised.  If the protocol's parser is disabled, the script author will need to output the data of the message in the script. 
+
+*TCP::respond [GENERICMESSAGE::message data]*
+
+==== MRF Events
+
+* *MR_INGRESS* - This event is raised when a message is received by the message proxy and before a route lookup occurs. Setting the route for a message will bypass route lookup.
+* *MR_EGRESS* - This event is raised after the route has been selected and processed and the message is delivered to the mr_proxy for forwarding on the new connflow.
+* *MR_FAILED* - This event is raised when a message has been returned to the originating flow due to a routing failure.
+
+==== MRF Commands
+
+https://techdocs.f5.com/en-us/bigip-15-1-0/big-ip-service-provider-generic-message-administration/how-to-use-generic-message-irules/how-to-use-generic-message-irules/mrf-irule-events-and-commands/mrf-commands.html
+
+

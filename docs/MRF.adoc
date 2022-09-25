@@ -1,0 +1,76 @@
+= Generic Message Example
+:toc: manual
+
+== What's this?
+
+This section contains the script depicted in https://techdocs.f5.com/en-us/bigip-15-1-0/big-ip-service-provider-generic-message-administration/generic-message-example.html
+
+== Server Preparation
+
+[source, bash]
+----
+nc -l 10.1.10.205 1234
+----
+
+== BIG-IP Configuration
+
+[source, bash]
+.*1. create pool*
+----
+create ltm pool POOL_CHAT members add { 10.1.10.205:1234 { address 10.1.10.205 } } monitor tcp_half_open 
+----
+
+[source, bash]
+.*2. create protocol profile*
+----
+create ltm message-routing generic protocol PROTOCOL_CHAT { app-service none disable-parser yes } 
+----
+
+[source, bash]
+.*3. create transport config profile*
+----
+create ltm message-routing generic transport-config TC_CHAT { profiles add { PROTOCOL_CHAT { } tcp { } } rules { IRULE_CHAT } } 
+----
+
+[source, bash]
+.*4. create peer*
+----
+create ltm message-routing generic peer PEER_CHAT { pool POOL_CHAT transport-config TC_CHAT } 
+----
+
+[source, bash]
+.*5. create route*
+----
+create ltm message-routing generic route ROUTE_CHAT { peers { PEER_CHAT } } 
+----
+
+[source, bash]
+.*6. create router*
+----
+create ltm message-routing generic router ROUTER_CHAT { app-service none routes add { ROUTE_CHAT } } 
+----
+
+[source, bash]
+.*7. create vs*
+----
+create ltm virtual VS_CHAT { destination 10.1.10.35:1234 ip-protocol tcp profiles add { PROTOCOL_CHAT { } ROUTER_CHAT { } tcp { } } rules { IRULE_CHAT } } 
+----
+
+[source, bash]
+.*8. IRULE_CHAT*
+----
+
+----
+
+[source, bash]
+.**
+----
+
+----
+
+[source, bash]
+.**
+----
+
+----
+
