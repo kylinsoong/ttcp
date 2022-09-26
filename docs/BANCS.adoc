@@ -1,7 +1,7 @@
 = BANCS
 :toc: manual
 
-== Install and Run
+== Install
 
 [source, bash]
 .*Install on x86*
@@ -21,7 +21,13 @@ rpm -ivh ttcp-1.13-1.x86_64.rpm
 /usr/bin/ttcp
 ----
 
-=== 1:1 on 2 x86
+== Run
+
+=== BANCS and CARD on same host
+
+//TODO
+
+=== BANCS and CARD on different host
 
 There are 2 x86 servers on for BANCS, another for CARD, use default ports pair(8805/8806). 
 
@@ -86,3 +92,240 @@ tcp        0      0 10.1.10.205:8806        10.1.10.1:50659         ESTABLISHED 
 25-Sep-2022 11:11:45 (1621) BANCS: response message from card, message: 2d31313136303030303031373730303234313639363830393730303030303030...
 ----
 
+=== BIG-IP sit between BANCS and CARD
+
+[source, bash]
+.*1. BIG-IP Configuration Set up*
+----
+tmsh create ltm message-routing generic protocol protocol_BANCS_CARD { app-service none disable-parser yes }
+tmsh create ltm message-routing generic transport-config tc_BANCS_CARD { profiles add { tcp-bancs { } protocol_BANCS_CARD { } } rules { IRULES_BANCS_TO_CARD } }
+tmsh create ltm pool pool_BANCS_TO_CARD members add { 10.1.10.205:8806 { address 10.1.10.205 } } monitor tcp_half_open
+tmsh create ltm pool pool_BANCS_FROM_CARD members add { 10.1.20.203:8805 { address 10.1.20.203 } } monitor tcp_half_open
+tmsh create ltm message-routing generic peer peer_BANCS_TO_CARD { pool pool_BANCS_TO_CARD transport-config tc_BANCS_CARD }
+tmsh create ltm message-routing generic peer peer_BANCS_FROM_CARD { pool pool_BANCS_FROM_CARD transport-config tc_BANCS_CARD }
+tmsh create ltm message-routing generic route route_BANCS_TO_CARD { destination-address my_dest peers { peer_BANCS_TO_CARD } }
+tmsh create ltm message-routing generic route route_BANCS_FROM_CARD { destination-address my_dest peers { peer_BANCS_FROM_CARD } }
+tmsh create ltm message-routing generic router router_BANCS_TO_CARD { app-service none routes add { route_BANCS_TO_CARD } traffic-group traffic-group-1 }
+tmsh create ltm message-routing generic router router_BANCS_FROM_CARD { app-service none routes add { route_BANCS_FROM_CARD } traffic-group traffic-group-1 }
+tmsh create ltm virtual vs_BANCS_TO_CARD { destination 10.1.10.31:8806 ip-protocol tcp pool pool_BANCS_TO_CARD profiles add { protocol_BANCS_CARD { } router_BANCS_TO_CARD { } tcp-bancs { } } rules { IRULES_BANCS_TO_CARD } source-address-translation { type automap } }
+tmsh create ltm virtual vs_BANCS_FROM_CARD { destination 10.1.10.31:8805 ip-protocol tcp pool pool_BANCS_FROM_CARD profiles add { protocol_BANCS_CARD { } router_BANCS_FROM_CARD { } tcp-bancs { } } rules { IRULES_BANCS_FROM_CARD } source-address-translation { type automap } }
+----
+
+[source, bash]
+.*2. IRULES_BANCS_TO_CARD*
+----
+when CLIENT_ACCEPTED {
+
+    TCP::collect
+
+    log local0. "CLIENT_ACCEPTED: [IP::remote_addr]:[TCP::remote_port] - [IP::local_addr]:[TCP::local_port]"
+
+    GENERICMESSAGE::peer name [IP::remote_addr]:[TCP::remote_port]
+}
+
+when CLIENT_DATA {
+
+    log local0. "CLIENT_DATA: [IP::remote_addr]:[TCP::remote_port] - [IP::local_addr]:[TCP::local_port]"
+    
+    set tcplen [TCP::payload length]
+    set payload [TCP::payload]
+    binary scan [TCP::payload] B* bit_data
+    binary scan [TCP::payload] H* hex_data
+    log local0. "tcplen: $tcplen, payload: $payload, bit_data: $bit_data, hex_data: $hex_data"
+    
+    set data_m  [substr $hex_data 0 52]
+    set am [binary format H* $data_m]
+    
+    log local0. "data_m: $data_m, am: $am"
+    
+    GENERICMESSAGE::message create $am
+    
+    TCP::release
+    TCP::collect
+    
+}
+
+when LB_SELECTED {
+    log local0. "LB_SELECTED"
+}
+
+when LB_FAILED {
+    log local0. "LB_FAILED"
+}
+
+when SERVER_CONNECTED {
+    GENERICMESSAGE::peer name [IP::remote_addr]:[TCP::remote_port]
+    log local0. "SERVER_CONNECTED: [IP::remote_addr]:[TCP::remote_port] - [IP::local_addr]:[TCP::local_port]"
+}
+
+when SERVER_DATA {
+    log local0. "SERVER_DATA: [IP::remote_addr]:[TCP::remote_port] - [IP::local_addr]:[TCP::local_port]"
+}
+
+when MR_INGRESS {
+    log local0. "mr-ingress: len: [GENERICMESSAGE::message length], src: [GENERICMESSAGE::message src], dst: [GENERICMESSAGE::message dst], nexthop: [MR::message nexthop], route: [MR::message route], transport: [MR::transport]"
+}
+
+when MR_EGRESS {
+    log local0. "mr-engress: len: [GENERICMESSAGE::message length], src: [GENERICMESSAGE::message src], dst: [GENERICMESSAGE::message dst], nexthop: [MR::message nexthop], route: [MR::message route], transport: [MR::transport]"
+}
+
+when MR_FAILED {
+    log local0. "MR_FAILED"
+}
+
+when GENERICMESSAGE_INGRESS {
+    log local0. "gm-ingress: len: [GENERICMESSAGE::message length], status: [GENERICMESSAGE::message status], isrequest: [GENERICMESSAGE::message is_request], seqnum: [GENERICMESSAGE::message request_sequence_number]"
+}
+
+when GENERICMESSAGE_EGRESS {
+    GENERICMESSAGE::message no_response true
+    TCP::respond [GENERICMESSAGE::message data]
+    log local0. "gm-egress: len: [GENERICMESSAGE::message length], status: [GENERICMESSAGE::message status], isrequest: [GENERICMESSAGE::message is_request], seqnum: [GENERICMESSAGE::message request_sequence_number]"
+}
+----
+
+[source, bash]
+.*3. IRULES_BANCS_FROM_CARD*
+----
+when CLIENT_ACCEPTED {
+
+    TCP::collect
+
+    log local0. "CLIENT_ACCEPTED: [IP::remote_addr]:[TCP::remote_port] - [IP::local_addr]:[TCP::local_port]"
+
+    GENERICMESSAGE::peer name [IP::remote_addr]:[TCP::remote_port]
+}
+
+when CLIENT_DATA {
+
+    log local0. "CLIENT_DATA: [IP::remote_addr]:[TCP::remote_port] - [IP::local_addr]:[TCP::local_port]"
+    
+    set tcplen [TCP::payload length]
+    set payload [TCP::payload]
+    binary scan [TCP::payload] B* bit_data
+    binary scan [TCP::payload] H* hex_data
+    log local0. "tcplen: $tcplen, payload: $payload, bit_data: $bit_data, hex_data: $hex_data"
+    
+    set data_m  [substr $hex_data 0 52]
+    set am [binary format H* $data_m]
+    
+    log local0. "data_m: $data_m, am: $am"
+    
+    GENERICMESSAGE::message create $am
+    
+    TCP::release
+    TCP::collect
+    
+}
+
+when LB_SELECTED {
+    log local0. "LB_SELECTED"
+}
+
+when LB_FAILED {
+    log local0. "LB_FAILED"
+}
+
+when SERVER_CONNECTED {
+    GENERICMESSAGE::peer name [IP::remote_addr]:[TCP::remote_port]
+    log local0. "SERVER_CONNECTED: [IP::remote_addr]:[TCP::remote_port] - [IP::local_addr]:[TCP::local_port]"
+}
+
+when SERVER_DATA {
+    log local0. "SERVER_DATA: [IP::remote_addr]:[TCP::remote_port] - [IP::local_addr]:[TCP::local_port]"
+}
+
+when MR_INGRESS {
+    log local0. "mr-ingress: len: [GENERICMESSAGE::message length], src: [GENERICMESSAGE::message src], dst: [GENERICMESSAGE::message dst], nexthop: [MR::message nexthop], route: [MR::message route], transport: [MR::transport]"
+}
+
+when MR_EGRESS {
+    log local0. "mr-engress: len: [GENERICMESSAGE::message length], src: [GENERICMESSAGE::message src], dst: [GENERICMESSAGE::message dst], nexthop: [MR::message nexthop], route: [MR::message route], transport: [MR::transport]"
+}
+
+when MR_FAILED {
+    log local0. "MR_FAILED"
+}
+
+when GENERICMESSAGE_INGRESS {
+    log local0. "gm-ingress: len: [GENERICMESSAGE::message length], status: [GENERICMESSAGE::message status], isrequest: [GENERICMESSAGE::message is_request], seqnum: [GENERICMESSAGE::message request_sequence_number]"
+}
+
+when GENERICMESSAGE_EGRESS {
+    GENERICMESSAGE::message no_response true
+    TCP::respond [GENERICMESSAGE::message data]
+    log local0. "gm-egress: len: [GENERICMESSAGE::message length], status: [GENERICMESSAGE::message status], isrequest: [GENERICMESSAGE::message is_request], seqnum: [GENERICMESSAGE::message request_sequence_number]"
+}
+----
+
+[source, bash]
+.*4. BIG-IP Configuration Clean Up (only used to clean BIG-IP configurations)*
+----
+tmsh delete ltm virtual vs_BANCS_TO_CARD 
+tmsh delete ltm virtual vs_BANCS_FROM_CARD 
+tmsh delete ltm message-routing generic router router_BANCS_TO_CARD 
+tmsh delete ltm message-routing generic router router_BANCS_FROM_CARD 
+tmsh delete ltm message-routing generic route route_BANCS_TO_CARD
+tmsh delete ltm message-routing generic route route_BANCS_FROM_CARD
+tmsh delete ltm message-routing generic peer peer_BANCS_TO_CARD 
+tmsh delete ltm message-routing generic peer peer_BANCS_FROM_CARD 
+tmsh delete ltm pool pool_BANCS_TO_CARD 
+tmsh delete ltm pool pool_BANCS_FROM_CARD 
+tmsh delete ltm message-routing generic transport-config tc_BANCS_CARD 
+tmsh delete ltm message-routing generic protocol protocol_BANCS_CARD
+----
+
+[source, bash]
+.*5. Start Card*
+----
+bancs -c 10.1.10.31
+----
+
+[source, bash]
+.*6. Start Bancs*
+----
+bancs -b 10.1.10.31
+----
+
+[source, bash]
+.*7. send test message*
+----
+bancs -e 10.1.20.203
+----
+
+[source, bash]
+.*8. Check the logs*
+----
+// BANCS
+27-Sep-2022 00:39:35 (1676) BANCS: inbound message from 10.1.20.1:61216, request message to card, message: abcdefghijklmnopqrstuvwxyz
+27-Sep-2022 00:39:37 (1675) BANCS: from card: 10.1.20.240:48964
+27-Sep-2022 00:39:37 (1675) BANCS: response message from card, message: abcdefghijklmnopqrstuvwxyz
+
+// CARD
+27-Sep-2022 00:39:37 (1427) CARD: receive request message from bancs: abcdefghijklmnopqrstuvwxyz
+27-Sep-2022 00:39:37 (1427) CARD: response message to bancs, message: abcdefghijklmnopqrstuvwxyz
+----
+
+[source, bash]
+.*9. Check BIG-IP MRF Rule Log*
+----
+Sep 26 23:36:13 test.com info tmm[10629]: Rule /Common/IRULES_BANCS_TO_CARD <CLIENT_ACCEPTED>: CLIENT_ACCEPTED: 10.1.10.1:61201 - 10.1.10.31:8806
+Sep 26 23:36:33 test.com info tmm[10629]: Rule /Common/IRULES_BANCS_TO_CARD <CLIENT_DATA>: CLIENT_DATA: 10.1.10.1:61201 - 10.1.10.31:8806
+Sep 26 23:36:33 test.com info tmm[10629]: Rule /Common/IRULES_BANCS_TO_CARD <CLIENT_DATA>: tcplen: 26, payload: abcdefghijklmnopqrstuvwxyz, bit_data: 0110000101100010011000110110010001100101011001100110011101101000011010010110101001101011011011000110110101101110011011110111000001110001011100100111001101110100011101010111011001110111011110000111100101111010, hex_data: 6162636465666768696a6b6c6d6e6f707172737475767778797a
+Sep 26 23:36:33 test.com info tmm[10629]: Rule /Common/IRULES_BANCS_TO_CARD <CLIENT_DATA>: data_m: 6162636465666768696a6b6c6d6e6f707172737475767778797a, am: abcdefghijklmnopqrstuvwxyz
+Sep 26 23:36:33 test.com info tmm[10629]: Rule /Common/IRULES_BANCS_TO_CARD <GENERICMESSAGE_INGRESS>: gm-ingress: len: 26, status: unprocessed, isrequest: 0, seqnum: 0
+Sep 26 23:36:33 test.com info tmm[10629]: Rule /Common/IRULES_BANCS_TO_CARD <MR_INGRESS>: mr-ingress: len: 26, src: 10.1.10.1:61201, dst: , nexthop: none, route: none, transport: virtual /Common/vs_BANCS_TO_CARD
+Sep 26 23:36:33 test.com info tmm[10629]: Rule /Common/IRULES_BANCS_TO_CARD <SERVER_CONNECTED>: SERVER_CONNECTED: 10.1.10.205:8806 - 10.1.10.240:61201
+Sep 26 23:36:33 test.com info tmm[10629]: Rule /Common/IRULES_BANCS_TO_CARD <MR_EGRESS>: mr-engress: len: 26, src: 10.1.10.1:61201, dst: , nexthop: none, route: virtual /Common/vs_BANCS_TO_CARD pool /Common/pool_BANCS_TO_CARD, transport: virtual /Common/vs_BANCS_TO_CARD
+Sep 26 23:36:33 test.com info tmm[10629]: Rule /Common/IRULES_BANCS_TO_CARD <GENERICMESSAGE_EGRESS>: gm-egress: len: 26, status: route found, isrequest: 1, seqnum: 0
+Sep 26 23:36:35 test.com info tmm1[10629]: Rule /Common/IRULES_BANCS_FROM_CARD <CLIENT_ACCEPTED>: CLIENT_ACCEPTED: 10.1.10.205:48964 - 10.1.10.31:8805
+Sep 26 23:36:35 test.com info tmm1[10629]: Rule /Common/IRULES_BANCS_FROM_CARD <CLIENT_DATA>: CLIENT_DATA: 10.1.10.205:48964 - 10.1.10.31:8805
+Sep 26 23:36:35 test.com info tmm1[10629]: Rule /Common/IRULES_BANCS_FROM_CARD <CLIENT_DATA>: tcplen: 26, payload: abcdefghijklmnopqrstuvwxyz, bit_data: 0110000101100010011000110110010001100101011001100110011101101000011010010110101001101011011011000110110101101110011011110111000001110001011100100111001101110100011101010111011001110111011110000111100101111010, hex_data: 6162636465666768696a6b6c6d6e6f707172737475767778797a
+Sep 26 23:36:35 test.com info tmm1[10629]: Rule /Common/IRULES_BANCS_FROM_CARD <CLIENT_DATA>: data_m: 6162636465666768696a6b6c6d6e6f707172737475767778797a, am: abcdefghijklmnopqrstuvwxyz
+Sep 26 23:36:35 test.com info tmm1[10629]: Rule /Common/IRULES_BANCS_FROM_CARD <GENERICMESSAGE_INGRESS>: gm-ingress: len: 26, status: unprocessed, isrequest: 0, seqnum: 0
+Sep 26 23:36:35 test.com info tmm1[10629]: Rule /Common/IRULES_BANCS_FROM_CARD <MR_INGRESS>: mr-ingress: len: 26, src: 10.1.10.205:48964, dst: , nexthop: none, route: none, transport: virtual /Common/vs_BANCS_FROM_CARD
+Sep 26 23:36:35 test.com info tmm1[10629]: Rule /Common/IRULES_BANCS_FROM_CARD <SERVER_CONNECTED>: SERVER_CONNECTED: 10.1.20.203:8805 - 10.1.20.240:48964
+Sep 26 23:36:35 test.com info tmm1[10629]: Rule /Common/IRULES_BANCS_FROM_CARD <MR_EGRESS>: mr-engress: len: 26, src: 10.1.10.205:48964, dst: , nexthop: none, route: virtual /Common/vs_BANCS_FROM_CARD pool /Common/pool_BANCS_FROM_CARD, transport: virtual /Common/vs_BANCS_FROM_CARD
+Sep 26 23:36:35 test.com info tmm1[10629]: Rule /Common/IRULES_BANCS_FROM_CARD <GENERICMESSAGE_EGRESS>: gm-egress: len: 26, status: route found, isrequest: 1, seqnum: 0
+----
