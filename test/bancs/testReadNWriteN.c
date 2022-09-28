@@ -12,7 +12,7 @@
 #include <signal.h>
 
 int server = 0 ;
-int msglen = 0, datalen = 0 ;  /* message length*/
+int msglen = 0 , len = 0;  /* message length*/
 
 extern int optind;
 
@@ -49,8 +49,28 @@ int main(int argc, char **argv) {
         if(strlen(data) < 6) goto usage;
         
         char strmsglen[5];
-        strncpy(strmsglen, data, 10);
-        printf("length: %d, message: %s, msglen: %s\n", strlen(data), data, strmsglen);   
+        strncpy(strmsglen, data, 5);
+
+        int i;
+        int cur = 0 ;
+        for (i = 0 ; i < 5 ; i ++) {
+            if(strmsglen[i] == '0' || strmsglen[i] == '-') {
+                cur++ ;
+            } else {
+                break;
+            }
+        }
+        char substrmsglen[5-cur];
+        int index = 0;
+        for(cur ; cur < 5 ; cur++) 
+            substrmsglen[index++] = strmsglen[cur]; 
+       
+        msglen = atoi(substrmsglen);
+        len = msglen + 5 ;
+
+        if(strlen(data) != len) goto usage;
+
+        printf("length: %d, message: %s, msglen: %d, len: %d\n", strlen(data), data, msglen, len);   
     }
 
 
