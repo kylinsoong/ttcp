@@ -63,7 +63,6 @@ int server = 1;                 /* 0=esb, 1=bancs, 3=card */
 
 FILE * fp;
 char bufr[MAX_DATA_LINE];
-char *data;
 
 extern int errno;
 extern int optind;
@@ -116,33 +115,6 @@ int main(int argc, char **argv)
 {
     if (argc < 2) goto usage;
 
-    // load bancs message from /etc/bancs.data
-    if((fp = fopen("/etc/bancs.data","r")) != NULL) {
-      while(fgets(bufr, MAX_DATA_LINE, fp) != NULL) {
-        if (strncmp("#", bufr, strlen("#")) == 0 || strlen(bufr) < 3)
-          continue;
-
-          char *key = strtok(bufr, "=");
-          char *val = strtok(NULL, "=");
-          key = strtok(key, "\r\t\n ");
-          val = strtok(val, "\r\t\n ");
-          //printf("key: %s, value: %s\n", key, val);
-
-          if(val ==  NULL) {
-            continue;
-          }
-
-          if (strcmp(key, "DATA") == 0 && strlen(val) > 5) {
-              char result[MAX_DATA_LINE];
-              strcpy(result, val);
-              data = result;
-              buflen = strlen(data);
-          } else if (strcmp(key, "PLACE_HOLDER") == 0 && strlen(val) > 5) {
-              // TODO
-          }
-      }
-    }
-
     // parse the main argv
     int c;
     while ((c = getopt(argc, argv, "ebcl:p:")) != -1) {
@@ -171,9 +143,6 @@ int main(int argc, char **argv)
         }
     }
 
-    if (buflen <= 0) {
-        goto usage;
-    }
 
     if (optind == argc) {
         goto usage;
@@ -197,9 +166,30 @@ int main(int argc, char **argv)
 
     Connect(fd, (struct sockaddr *)&esb_to_bancs, sizeof(esb_to_bancs));
     out_sys(concat("connect to bancs ", host));
-    Writen(fd, data, strlen(data));
-    out_sys("send message to bancs");
-    out_sys(concat("message: ", data)); 
+
+    if((fp = fopen("/etc/bancs.data","r")) != NULL) {
+        while(fgets(bufr, MAX_DATA_LINE, fp) != NULL) {
+    
+            if (strncmp("#", bufr, strlen("#")) == 0 || strlen(bufr) < 6)
+                continue;
+
+            strtok(bufr, "\n");
+
+            char strmsglen[5];
+            strncpy(strmsglen, bufr, 5);
+            int len = extlength(strmsglen) + 5;
+
+            if(strlen(bufr) != len) {
+                out_sys(concat("Invalid message, message length is not equals header defined length, message: ", bufr));
+                continue;             
+            } 
+            Writen(fd, bufr, len);
+            out_sys(concat("send message to bancs, message: ", bufr));
+        }        
+    } else {
+        err_sys("file 'bancs.data' not exist");
+    }
+
     out_sys("exit"); 
 
   } else if(server == 1) {
