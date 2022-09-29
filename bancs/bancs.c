@@ -59,7 +59,7 @@ short cport = 8806;               /* TCP port number */
 short inport = 9805; 
 
 char *host;                     /* ptr to name of host */
-int server = 1;                 /* 0=client, 1=server */
+int server = 1;                 /* 0=esb, 1=bancs, 3=card */
 
 FILE * fp;
 char bufr[MAX_DATA_LINE];
@@ -100,15 +100,17 @@ pid_t    Fork(void);
 void     sig_chld(int);
 Sigfunc  *Signal(int, Sigfunc *);
 
+
 void     Writen(int, void *, size_t);
+ssize_t  Readn(int, void *, size_t);
 ssize_t  writen(int, const void *, size_t);
+ssize_t  readn(int, void *, size_t);
+int      extlength(void *);
 
-ssize_t  Readline(int, void *, size_t);
-ssize_t  readline(int, void *, size_t);
-ssize_t  my_read(int fd, char *ptr);
 
-/* Core logic entries*/
+/*
 void     Str_puts(int);
+*/
 
 int main(int argc, char **argv) 
 {
@@ -231,22 +233,22 @@ int main(int argc, char **argv)
 
        connfd_bancs = Accept(fd_bancs, (struct sockaddr *)&bancs_from_card, &bancs_from_card_len);
        char *peer = Getpeername(connfd_bancs);
-       out_sys(concat("from card: ", peer));
+       out_sys(concat("conn from card: ", peer));
 
        // Handle CARD system's response message;
        // Repeatedly extract the message
        // Current handling mechanism is only output the response message to log.
        for(;;) {
-          char    line[MAX_DATA_LINE];
-          ssize_t n = Readline(connfd_bancs, line, buflen);
-          if(n < 0) {
-              err_sys("read");
-          } else if (n == 0) {
-              out_sys(concat("connection closed by ", peer));
-              return;
-          }
+          char header[5];
+          Readn(connfd_bancs, header, 5);
 
-          out_sys(concat("response message from card, message: ", line));
+          int datalen = extlength(header);
+          char message[datalen];
+          Readn(connfd_bancs, message, datalen);
+          message[datalen] = '\0';
+          char *total = concat(header, message);
+
+          out_sys(concat("response message from card, message: ", total));
         }
      } 
 
@@ -269,7 +271,7 @@ int main(int argc, char **argv)
 
     connfd = Accept(fd, (struct sockaddr *)&card_from_bancs, &card_from_bancs_len);
     char *peer = Getpeername(connfd);
-    out_sys(concat("from bancs ", peer));
+    out_sys(concat("conn from bancs ", peer));
 
     sleep(lazy);   
 
@@ -291,19 +293,23 @@ int main(int argc, char **argv)
 
     // handle bancs request message
     for(;;) {
-      char    line[buflen];
-      ssize_t n = Readline(connfd, line, buflen);
-      if(n < 0) {
-        err_sys("read");
-      } else if (n == 0) {
-        out_sys(concat("connection closed by ", peer));
-        return;
-      }
-   
-      out_sys(concat("receive request message from bancs: ", line));
 
-      Writen(fd_to_bancs, line, strlen(line));
-      out_sys(concat("response message to bancs, message: ", line));   
+      char header[5];
+      Readn(connfd, header, 5);
+
+      int datalen = extlength(header);
+      char message[datalen];
+      Readn(connfd, message, datalen);
+      message[datalen] = '\0';
+
+      char *total = concat(header, message);
+      out_sys(concat("receive request message from bancs: ", total));
+     
+     // TODO --
+     // add card process logic
+
+      Writen(fd_to_bancs, total, datalen + 5);
+      out_sys(concat("response message to bancs, message: ", total));   
     }
 
   }
@@ -355,20 +361,21 @@ void InboundHandler() {
 
     char *peer = Getpeername(connfd);
 
-    char    line[buflen];
-    ssize_t n = Readline(connfd, line, buflen);
-    if(n < 0) {
-      err_sys("read");
-    } else if (n == 0) {
-      out_sys(concat("connection closed by ", peer));
-      return;
-    }
+    char header[5];
+    Readn(connfd, header, 5);
 
-    Writen(fd_to_card, line, strlen(line));
+    int datalen = extlength(header);
+    char message[datalen];
+    Readn(connfd, message, datalen);
+    message[datalen] = '\0';
+
+    char *total = concat(header, message);
+
+    Writen(fd_to_card, total, datalen + 5);
 
     char *inpeer = concat("inbound message from ", peer);
     char *msgpre = concat(inpeer, ", request message to card, message: ");
-    out_sys(concat(msgpre, line));
+    out_sys(concat(msgpre, total));
 
     Close(connfd);
   }
@@ -555,11 +562,35 @@ Sigfunc * Signal(int signo, Sigfunc *func)        /* for our signal() function *
     return(sigfunc);
 }
 
-void Writen(int fd, void *ptr, size_t nbytes){
+
+
+/*
+ *
+ * Write "n" bytes to a descriptor. 
+ *
+ * */
+void Writen(int fd, void *ptr, size_t nbytes)
+{
 
     if (writen(fd, ptr, nbytes) != nbytes)
         err_sys("writen");
 }
+
+/*
+ *
+ * Read "n" bytes from a descriptor.
+ *
+ * */
+ssize_t Readn(int fd, void *ptr, size_t nbytes)
+{
+    ssize_t         n;
+
+    if ( (n = readn(fd, ptr, nbytes)) < 0)
+        err_sys("readn error");
+
+    return(n);
+}
+
 
 ssize_t writen(int fd, const void *vptr, size_t n)
 {
@@ -584,69 +615,52 @@ ssize_t writen(int fd, const void *vptr, size_t n)
     return (n);
 }
 
-ssize_t Readline(int fd, void *ptr, size_t maxlen)
+ssize_t readn(int fd, void *vptr, size_t n)
 {
-    ssize_t n;
-
-    if ( (n = readline(fd, ptr, maxlen)) < 0)
-        err_sys("readline");
-    return (n);
-}
-
-ssize_t readline(int fd, void *vptr, size_t maxlen)
-{
-    ssize_t n, rc;
-    char    c, *ptr;
-    char    read_buf[MAX_DATA_LINE];
+    size_t  nleft;
+    ssize_t nread;
+    char    *ptr;
 
     ptr = vptr;
-    for (n = 0; n < maxlen; n++) {
-        if ( (rc = my_read(fd, &c)) == 1) {
-            *ptr++ = c;
-            if (c == '\n')
-                break;
-        } else if (rc == 0) {
-            *ptr = 0;
-            return(n - 1);
-        } else {
-            return(-1);
-        }
-    }
-
-    *ptr = 0;
-    return(n);
-}
-
-ssize_t my_read(int fd, char *ptr)
-{
-
-    int      read_cnt;
-    char     *read_ptr;
-    char     read_buf[MAX_DATA_LINE];
-
-    if (read_cnt <= 0) {
-        again:
-        if ( (read_cnt = read(fd, read_buf, sizeof(read_buf))) < 0) {
+    nleft = n;
+    while (nleft > 0) {
+        if ( (nread = read(fd, ptr, nleft)) < 0) {
             if (errno == EINTR)
-                goto again;
-        } else if (read_cnt == 0) {
-            return(0);
-        }
+                nread = 0;              /* and call read() again */
+            else
+                return(-1);
+        } else if (nread == 0)
+            break;                 
 
-        read_ptr = read_buf;
+                nleft -= nread;
+                ptr   += nread;
     }
-
-    read_cnt--;
-    *ptr = *read_ptr++;
-    return(1);
+    return(n - nleft);              
 }
 
-void Str_puts(int sockfd)
+int extlength(void *vptr)
 {
-    char recvline[MAX_DATA_LINE];
 
-    if (Readline(sockfd, recvline, MAX_DATA_LINE) == 0)
-        err_sys("server terminated prematurely");
-    
-    Fputs(recvline, stdout);
-} 
+    int i;
+    int cur ;
+    char    *strmsglen;
+
+    strmsglen = vptr;
+    cur = 0;
+    for (i = 0 ; i < 5 ; i ++) {
+        if(strmsglen[i] == '0' || strmsglen[i] == '-') {
+            cur++ ;
+        } else {
+            break;
+        }
+    }
+    char substrmsglen[5-cur];
+    int index = 0;
+    for(cur ; cur < 5 ; cur++)
+        substrmsglen[index++] = strmsglen[cur];
+
+    int msglen = atoi(substrmsglen);
+
+    return msglen;
+}
+
