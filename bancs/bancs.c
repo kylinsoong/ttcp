@@ -51,7 +51,6 @@ int domain, fromlen, bancs_from_esb_len, bancs_from_card_len, card_from_bancs_le
 int fd, fd_bancs, fd_to_card, fd_to_bancs;                 /* fd of network socket */
 int connfd, connfd_bancs;
 
-int buflen = 0;
 int lazy = 2;
 
 short port = 8805;
@@ -73,7 +72,7 @@ Usage: bancs -e [-options] <host of BANCS> \n\
        bancs -b [-options] <host of CARD>\n\
        bancs -c [-options] <host of BANCS>\n\
 Common options:\n\
-        -l ##   specify the message length\n\
+        -l ##   the length of lazy sock write/read time (default 2 seconds)\n\
         -p ##   port number to send to or listen at (default 8805/8806 9805)\n\
 ";
 
@@ -134,9 +133,7 @@ int main(int argc, char **argv)
             inport = port + 1000; 
             break;
         case 'l':
-            if (buflen <= 0) {
-                buflen = atoi(optarg);
-            }
+            lazy = atoi(optarg);
             break;
         default:
             goto usage;
@@ -185,6 +182,7 @@ int main(int argc, char **argv)
             } 
             Writen(fd, bufr, len);
             out_sys(concat("send message to bancs, message: ", bufr));
+            sleep(lazy);
         }        
     } else {
         err_sys("file 'bancs.data' not exist");
@@ -286,8 +284,15 @@ int main(int argc, char **argv)
 
       char header[5];
       Readn(connfd, header, 5);
-
+      header[5] = '\0';
       int datalen = extlength(header);
+
+/*
+      if(datalen <= 0) {
+         out_sys("bancs closed the connection"); 
+         break;
+      }
+*/
       char message[datalen];
       Readn(connfd, message, datalen);
       message[datalen] = '\0';
@@ -300,6 +305,8 @@ int main(int argc, char **argv)
 
       Writen(fd_to_bancs, total, datalen + 5);
       out_sys(concat("response message to bancs, message: ", total));   
+      memset(header, 0, 5);
+      memset(message, 0, datalen);
     }
 
   }
@@ -351,21 +358,29 @@ void InboundHandler() {
 
     char *peer = Getpeername(connfd);
 
-    char header[5];
-    Readn(connfd, header, 5);
+    for(;;) {
+        char header[5];
+        Readn(connfd, header, 5);
+        header[5] = '\0';
+        int datalen = extlength(header);
 
-    int datalen = extlength(header);
-    char message[datalen];
-    Readn(connfd, message, datalen);
-    message[datalen] = '\0';
+        if(datalen <= 0) {
+            break;
+        }
 
-    char *total = concat(header, message);
+        char message[datalen];
+        Readn(connfd, message, datalen);
+        message[datalen] = '\0';
 
-    Writen(fd_to_card, total, datalen + 5);
-
-    char *inpeer = concat("inbound message from ", peer);
-    char *msgpre = concat(inpeer, ", request message to card, message: ");
-    out_sys(concat(msgpre, total));
+        char *total = concat(header, message);
+        Writen(fd_to_card, total, datalen + 5);
+        char *inpeer = concat("inbound message from ", peer);
+        char *msgpre = concat(inpeer, ", request message to card, message: ");
+        out_sys(concat(msgpre, total));
+        
+        memset(header, 0, 5);
+        memset(message, 0, datalen);
+    }
 
     Close(connfd);
   }
