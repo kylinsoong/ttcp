@@ -24,7 +24,14 @@
  * 2. A client simulate ESB send the request message to BANCS via 9902 which listened by BANCS
  * 2. BANCS forward request message to CARD
  * 3. CARD send response message to BANCS
- *   
+ *  
+ *
+ * DESIGN PRINCIPLES:
+ *
+ * 1. Client ESB load the ISO8583 Message from '/etc/bancs.data', which the file keep bunch of Messages, one message per linem, and send to Bancs via 1 connection.
+ * 2. All Handler contains a listened entrypoint, and started as a separate threads  
+ *
+ *
  */
 
 #include <stdio.h>
@@ -39,6 +46,7 @@
 #include <time.h>
 #include <errno.h>
 #include <signal.h>
+#include <sys/mman.h>
 
 
 #define MAX_DATA_LINE 4096
@@ -50,6 +58,8 @@ struct sockaddr_storage esb_to_bancs, bancs_esb_ss, bancs_from_esb, bancs_card_s
 int domain, fromlen, bancs_from_esb_len, bancs_from_card_len, card_from_bancs_len;
 int fd, fd_bancs, fd_to_card, fd_to_bancs;                 /* fd of network socket */
 int connfd, connfd_bancs;
+
+static int *glob_fd_to_card;
 
 int lazy = 2;
 
@@ -201,6 +211,8 @@ int main(int argc, char **argv)
 
     out_sys("start");
 
+    glob_fd_to_card = mmap(NULL, sizeof *glob_fd_to_card, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+
     Signal(SIGCHLD, sig_chld);
     int rc = fork();
     if (rc < 0 ) {
@@ -232,15 +244,17 @@ int main(int argc, char **argv)
             ((struct sockaddr_in *)&bancs_to_card)->sin_port = htons(cport);
 
             fd_to_card = Socket(AF_INET, SOCK_STREAM, 0);
-            out_sys("socket");
+            if(debug) out_sys("socket");
 
             Connect(fd_to_card, (struct sockaddr *)&bancs_to_card, sizeof(bancs_to_card));
             out_sys(concat("connect to card ", host));
+           
+            *glob_fd_to_card = fd_to_card ;
 
             int subpid, status;
             while((subpid = waitpid(-1, &status, 0)) > 0) {
                 char str[80];
-                sprintf(str, "child %d terminated", subpid);
+                sprintf(str, "process %d terminated, errno: %d", subpid, errno);
                 out_sys(str);
             }
 
@@ -371,6 +385,20 @@ void InboundHandler() {
 
     char *peer = Getpeername(connfd);
 
+    while(*glob_fd_to_card <= 0) {
+        out_sys("BANCS TO CARD Connection is not initialized\n");
+        sleep(lazy * 3);
+    }
+
+/*
+  Snnipts: open socket fd in sub threads.
+    char fd_path[64];
+    snprintf(fd_path, sizeof(fd_path), "/proc/%d/fd/%d", getppid(), *glob_fd_to_card);
+    int new_fd = open(fd_path, O_RDWR);
+    char strs[80];
+    sprintf(strs, "open new sock fd: %d", new_fd);
+    out_sys(strs);   
+*/
     for(;;) {
         char header[5];
         Readn(connfd, header, 5);
@@ -378,6 +406,9 @@ void InboundHandler() {
         int datalen = extlength(header);
 
         if(datalen <= 0) {
+            char str[80];
+            sprintf(str, "CLIENT %s exit", peer);
+            out_sys(str);
             break;
         }
 
@@ -386,11 +417,25 @@ void InboundHandler() {
         message[datalen] = '\0';
 
         char *total = concat(header, message);
-printf("fd_to_card: %d/n", fd_to_card);
-        Writen(fd_to_card, total, datalen + 5);
-        char *inpeer = concat("inbound message from ", peer);
-        char *msgpre = concat(inpeer, ", request message to card, message: ");
-        out_sys(concat(msgpre, total));
+
+/*
+        while(*glob_fd_to_card <= 0) {
+            out_sys("BANCS TO CARD Connection is not initialized\n");
+            sleep(lazy * 3);
+        }
+
+printf("fd_to_card: %d, message: %s\n", fd_to_card, total);
+sleep(3);
+memset(header, 0, 5);
+memset(message, 0, datalen);
+continue;
+*/
+        int sock_fd_to_card = *glob_fd_to_card;
+        char str[80];
+        sprintf(str, "inbound message from %s, message length: %d, ppid: %d, sock fd: %d", peer, datalen, getppid(), *glob_fd_to_card);
+        out_sys(str);
+        Writen(sock_fd_to_card, total, datalen + 5);
+        out_sys(concat("request message to card, message: ", total));
         
         memset(header, 0, 5);
         memset(message, 0, datalen);
@@ -429,7 +474,7 @@ void BancsFromCardHandler() {
 
         connfd_bancs = Accept(fd_bancs, (struct sockaddr *)&bancs_from_card, &bancs_from_card_len);
         char *peer = Getpeername(connfd_bancs);
-        out_sys(concat("conn from card: ", peer));
+        out_sys(concat("connection from card: ", peer));
 
         for(;;) {
             char header[5];
