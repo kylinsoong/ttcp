@@ -59,6 +59,8 @@ short inport = 9805;
 
 char *host;                     /* ptr to name of host */
 int server = 1;                 /* 0=esb, 1=bancs, 3=card */
+int debug = 0 ;
+
 
 FILE * fp;
 char bufr[MAX_DATA_LINE];
@@ -72,6 +74,7 @@ Usage: bancs -e [-options] <host of BANCS> \n\
        bancs -b [-options] <host of CARD>\n\
        bancs -c [-options] <host of BANCS>\n\
 Common options:\n\
+        -d      enable debug logging\n\
         -l ##   the length of lazy sock write/read time (default 2 seconds)\n\
         -p ##   port number to send to or listen at (default 8805/8806 9805)\n\
 ";
@@ -85,6 +88,7 @@ void     Connect(int, const struct sockaddr *, socklen_t);
 char     *Getpeername(int);
 
 void     InboundHandler(void);
+void     BancsFromCardHandler(void);
 
 /* IO */
 void     Close(int);
@@ -116,7 +120,7 @@ int main(int argc, char **argv)
 
     // parse the main argv
     int c;
-    while ((c = getopt(argc, argv, "ebcl:p:")) != -1) {
+    while ((c = getopt(argc, argv, "ebcdl:p:")) != -1) {
         switch (c) {
         case 'e':
             server = 0;
@@ -131,6 +135,9 @@ int main(int argc, char **argv)
             port = atoi(optarg);
             cport = port + 1;
             inport = port + 1000; 
+            break;
+        case 'd':
+            debug = 1;
             break;
         case 'l':
             lazy = atoi(optarg);
@@ -199,45 +206,47 @@ int main(int argc, char **argv)
     if (rc < 0 ) {
       err_sys("Error:unable to create thread");
     } else if ( rc == 0) {
-      InboundHandler();
+      //InboundHandler();
+      BancsFromCardHandler();
     } else {
 
-       sleep(lazy);      
+        Signal(SIGCHLD, sig_chld);
+        int src = fork();
+        if(src < 0) {
+            err_sys("Error:unable to create thread");
+        } else if (src == 0) {
+            //BancsFromCardHandler();
+            InboundHandler();
+        } else {
 
-       // Standard Sock wait for CARD to connect,
-       // and handle CARD's response message
-       memset(&bancs_card_ss, 0, sizeof(&bancs_card_ss));
-       memset(&bancs_from_card, 0, sizeof(&bancs_from_card));
-       
-       ((struct sockaddr_in *)&bancs_card_ss)->sin_port = htons(port);
-       fd_bancs = Socket(AF_INET, SOCK_STREAM, 0);
-       out_sys("socket");
 
-       Bind(fd_bancs, (struct sockaddr *)&bancs_card_ss, sizeof(bancs_card_ss));
-       out_sys("bind");
+            sleep(lazy * 5);
 
-       Listen(fd_bancs, 5);
-       out_sys("listen");
+            struct addrinfo *dest;
+            if(getaddrinfo(host, NULL, NULL, &dest)!=0)
+                err_sys("badhostname");
 
-       connfd_bancs = Accept(fd_bancs, (struct sockaddr *)&bancs_from_card, &bancs_from_card_len);
-       char *peer = Getpeername(connfd_bancs);
-       out_sys(concat("conn from card: ", peer));
+            memset(&bancs_to_card, 0, sizeof(&bancs_to_card));
+            memcpy((void*)&bancs_to_card,(void*)dest->ai_addr, dest->ai_addrlen);
 
-       // Handle CARD system's response message;
-       // Repeatedly extract the message
-       // Current handling mechanism is only output the response message to log.
-       for(;;) {
-          char header[5];
-          Readn(connfd_bancs, header, 5);
+            ((struct sockaddr_in *)&bancs_to_card)->sin_port = htons(cport);
 
-          int datalen = extlength(header);
-          char message[datalen];
-          Readn(connfd_bancs, message, datalen);
-          message[datalen] = '\0';
-          char *total = concat(header, message);
+            fd_to_card = Socket(AF_INET, SOCK_STREAM, 0);
+            out_sys("socket");
 
-          out_sys(concat("response message from card, message: ", total));
-        }
+            Connect(fd_to_card, (struct sockaddr *)&bancs_to_card, sizeof(bancs_to_card));
+            out_sys(concat("connect to card ", host));
+
+            int subpid, status;
+            while((subpid = waitpid(-1, &status, 0)) > 0) {
+                char str[80];
+                sprintf(str, "child %d terminated", subpid);
+                out_sys(str);
+            }
+
+        }           
+
+
      } 
 
   } else if(server == 2) {
@@ -324,7 +333,7 @@ int main(int argc, char **argv)
 void InboundHandler() {
 
   out_sys("inbound handler start");
-  
+/*  
   struct addrinfo *dest;
   if(getaddrinfo(host, NULL, NULL, &dest)!=0)
     err_sys("badhostname");
@@ -335,23 +344,27 @@ void InboundHandler() {
   ((struct sockaddr_in *)&bancs_to_card)->sin_port = htons(cport);
 
   fd_to_card = Socket(AF_INET, SOCK_STREAM, 0);
-  out_sys("socket");
+  if(debug) out_sys("socket");
 
   Connect(fd_to_card, (struct sockaddr *)&bancs_to_card, sizeof(bancs_to_card));
   out_sys(concat("connect to card ", host));
+
+*/
 
   memset(&bancs_esb_ss, 0, sizeof(&bancs_esb_ss));
   memset(&bancs_from_esb, 0, sizeof(&bancs_from_esb));
 
   ((struct sockaddr_in *)&bancs_esb_ss)->sin_port = htons(inport);
   fd = Socket(AF_INET, SOCK_STREAM, 0);
-  out_sys("inbound handler socket");
+  if(debug) out_sys("inbound handler socket");
 
   Bind(fd, (struct sockaddr *)&bancs_esb_ss, sizeof(bancs_esb_ss));
-  out_sys("inbound handler bind");
+  if(debug) out_sys("inbound handler bind");
 
   Listen(fd, 5);
-  out_sys("inbound handler listen");
+  char str[80];
+  sprintf(str, "inbound handler listen on 0.0.0.0:%d", inport);
+  out_sys(str);
 
   for(;;) {
     connfd = Accept(fd, (struct sockaddr *)&bancs_from_esb, &bancs_from_esb_len);
@@ -373,6 +386,7 @@ void InboundHandler() {
         message[datalen] = '\0';
 
         char *total = concat(header, message);
+printf("fd_to_card: %d/n", fd_to_card);
         Writen(fd_to_card, total, datalen + 5);
         char *inpeer = concat("inbound message from ", peer);
         char *msgpre = concat(inpeer, ", request message to card, message: ");
@@ -384,6 +398,76 @@ void InboundHandler() {
 
     Close(connfd);
   }
+}
+
+/*
+ * Listen for Card to connect, handle card's message.
+ * Standard Sock wait for CARD to connect, and handle CARD's response message.
+ * Handle CARD system's response message; Repeatedly extract the message. Current handling mechanism is only output the response message to log.
+ *
+ */
+void BancsFromCardHandler() {
+  
+    out_sys("card handler start");
+
+    memset(&bancs_card_ss, 0, sizeof(&bancs_card_ss));
+    memset(&bancs_from_card, 0, sizeof(&bancs_from_card));
+
+    ((struct sockaddr_in *)&bancs_card_ss)->sin_port = htons(port);
+    fd_bancs = Socket(AF_INET, SOCK_STREAM, 0);
+    if(debug)out_sys("socket");
+
+    Bind(fd_bancs, (struct sockaddr *)&bancs_card_ss, sizeof(bancs_card_ss));
+    if(debug)out_sys("bind");
+
+    Listen(fd_bancs, 5);
+    char str[80];
+    sprintf(str, "card handler listen on 0.0.0.0:%d", port);
+    out_sys(str);
+
+    for(;;) {
+
+        connfd_bancs = Accept(fd_bancs, (struct sockaddr *)&bancs_from_card, &bancs_from_card_len);
+        char *peer = Getpeername(connfd_bancs);
+        out_sys(concat("conn from card: ", peer));
+
+        for(;;) {
+            char header[5];
+            Readn(connfd_bancs, header, 5);
+            header[5] = '\0';
+            int datalen = extlength(header);
+
+            if(datalen <= 0) {
+                char str[80];
+                sprintf(str, "CARD %s exit", peer);
+                out_sys(str);
+                break;
+            }
+
+            char message[datalen];
+            Readn(connfd_bancs, message, datalen);
+            message[datalen] = '\0';
+            char *total = concat(header, message);
+            out_sys(concat("response message from card, message: ", total)); // TODO- add to parse ISO8583 to extract specific bit position.  
+        }
+    }
+
+/*
+    connfd_bancs = Accept(fd_bancs, (struct sockaddr *)&bancs_from_card, &bancs_from_card_len);
+    char *peer = Getpeername(connfd_bancs);
+    out_sys(concat("conn from card: ", peer));
+    for(;;) {
+        char header[5];
+        Readn(connfd_bancs, header, 5);
+        header[5] = '\0';
+        int datalen = extlength(header);
+        char message[datalen];
+        Readn(connfd_bancs, message, datalen);
+        message[datalen] = '\0';
+        char *total = concat(header, message);
+        out_sys(concat("response message from card, message: ", total));
+    }
+*/
 }
 
 int Socket(int family, int type, int protocol)
