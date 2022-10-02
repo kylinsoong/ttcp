@@ -31,7 +31,18 @@
  * 1. Client ESB load the ISO8583 Message from '/etc/bancs.data', which the file keep bunch of Messages, one message per linem, and send to Bancs via 1 connection.
  * 2. All Handler contains a listened entrypoint, and started as a separate threads  
  *    
- *      Sub threads use pipe to write the message received from socket
+ *      Sub threads use pipe to write the message received from socket, main thread read message from pipe, and send the message via write sock fd.
+ *      3 Handler are 3 separate threads, 2 Init be invoked by main thread. The BANCS has 2 Handler and 1 Init; the CARD has 1 Handler and 1 Init.
+ *
+ *      Inbound sequence(N/S from ESB, E/W from BANCS to CARD):
+ *
+ *          ESB  -  BANCS's InboundHandler  -  BANCS's BancsToCardInit  -  CARD's CardFromBancsHandler   
+ *
+ *      Outbound sequence(E/W from CARD to BANCS):
+ *
+ *          CARD's CardToBancsInit  -  BANCS's BancsFromCardHandler    
+ *
+ * 3. ISO8583 compatible
  *
  * RUN ON SINGLE LINUX SERVER:
  *
@@ -107,6 +118,8 @@ char     *Getpeername(int);
 void     InboundHandler(void);
 void     BancsFromCardHandler(void);
 void     BancsToCardInit(void);
+void     CardFromBancsHandler(void);
+void     CardToBancsInit(void);
 
 /* IO */
 void     Close(int);
@@ -242,7 +255,6 @@ int main(int argc, char **argv)
 
             BancsToCardInit();
 
-
             int nbytes;
             char inbuf[MAX_DATA_LINE];
             while ((nbytes = read(p[0], inbuf, MAX_DATA_LINE)) > 0) {
@@ -281,69 +293,38 @@ int main(int argc, char **argv)
 
     out_sys("start");
 
-    memset(&card_bancs_ss, 0, sizeof(&card_bancs_ss));
-    memset(&card_from_bancs, 0, sizeof(&card_from_bancs));
+    Signal(SIGCHLD, sig_chld);
+    int rc = fork();
+    if(rc < 0) {
+        err_sys("Error:unable to create thread");
+    } else if (rc == 0) {
+        CardFromBancsHandler();
+    } else {
+        sleep(lazy * 10); 
 
-    ((struct sockaddr_in *)&card_bancs_ss)->sin_port = htons(cport);
-    fd = Socket(AF_INET, SOCK_STREAM, 0);
-    out_sys("socket");
+        CardToBancsInit();
 
-    Bind(fd, (struct sockaddr *)&card_bancs_ss, sizeof(card_bancs_ss));
-    out_sys("bind");
+        int nbytes;
+        char inbuf[MAX_DATA_LINE];
+        while ((nbytes = read(p[0], inbuf, MAX_DATA_LINE)) > 0) {
+            char header[5];
+            strncpy(header, inbuf, 5);
+            int datalen = extlength(header);
 
-    Listen(fd, 5);
-    out_sys("listen");
+            inbuf[datalen + 5] = '\0';
 
-    connfd = Accept(fd, (struct sockaddr *)&card_from_bancs, &card_from_bancs_len);
-    char *peer = Getpeername(connfd);
-    out_sys(concat("conn from bancs ", peer));
+            if(debug) {
+                char extMessage[MAX_DATA_LINE];
+                sprintf(extMessage, "extract message from pipe, message length: %d, header: %s, total length: %d, message: %s", datalen, header, strlen(inbuf), inbuf);
+                out_sys(extMessage);
+            }
 
-    sleep(lazy);   
+            inbuf[datalen + 5] = '\0';
 
-    // connect to bancs
-    struct addrinfo *dest;
-    if(getaddrinfo(host, NULL, NULL, &dest)!=0)
-      err_sys("badhostname");
-
-    memset(&card_to_bancs, 0, sizeof(&card_to_bancs));
-    memcpy((void*)&card_to_bancs,(void*)dest->ai_addr, dest->ai_addrlen);
-
-    ((struct sockaddr_in *)&card_to_bancs)->sin_port = htons(port);
-
-    fd_to_bancs = Socket(AF_INET, SOCK_STREAM, 0);
-    out_sys("socket");
-
-    Connect(fd_to_bancs, (struct sockaddr *)&card_to_bancs, sizeof(card_to_bancs));
-    out_sys(concat("connect to bancs ", host));
-
-    // handle bancs request message
-    for(;;) {
-
-      char header[5];
-      Readn(connfd, header, 5);
-      header[5] = '\0';
-      int datalen = extlength(header);
-
-
-      if(datalen <= 0) {
-         out_sys("bancs closed the connection"); 
-         break;
-      }
-
-      char message[datalen];
-      Readn(connfd, message, datalen);
-      message[datalen] = '\0';
-
-      char *total = concat(header, message);
-      out_sys(concat("receive request message from bancs: ", total));
-     
-     // TODO --
-     // add card process logic
-
-      Writen(fd_to_bancs, total, datalen + 5);
-      out_sys(concat("response message to bancs, message: ", total));   
-      memset(header, 0, 5);
-      memset(message, 0, datalen);
+            Writen(fd_to_bancs, inbuf, strlen(inbuf));
+            out_sys(concat("response message to bancs, message: ", inbuf));
+            memset(inbuf, 0, strlen(inbuf));
+        }
     }
 
   }
@@ -394,7 +375,7 @@ void InboundHandler() {
 
         if(datalen <= 0) {
             char str[80];
-            sprintf(str, "CLIENT %s exit", peer);
+            sprintf(str, "peer %s exit", peer);
             if(debug) out_sys(str);
             break;
         }
@@ -407,7 +388,7 @@ void InboundHandler() {
         total[datalen + 5] = '\0';
         
         char str[80];
-        sprintf(str, "inbound message from %s, message length: %d, total length: %d", peer, datalen, strlen(total));
+        sprintf(str, "receive message from %s, message length: %d, total length: %d", peer, datalen, strlen(total));
         out_sys(str);
       
         
@@ -503,9 +484,97 @@ void BancsToCardInit() {
     Connect(fd_to_card, (struct sockaddr *)&bancs_to_card, sizeof(bancs_to_card));
     out_sys(concat("connect to card ", host));
 
+}
 
+void CardFromBancsHandler() {
+
+    memset(&card_bancs_ss, 0, sizeof(&card_bancs_ss));
+    memset(&card_from_bancs, 0, sizeof(&card_from_bancs));
+
+    ((struct sockaddr_in *)&card_bancs_ss)->sin_port = htons(cport);
+    fd = Socket(AF_INET, SOCK_STREAM, 0);
+    if(debug) {
+        char str[80];
+        sprintf(str, "from bancs socket, sock fd: %d", fd);
+        out_sys(str);
+    }
+
+    Bind(fd, (struct sockaddr *)&card_bancs_ss, sizeof(card_bancs_ss));
+    if(debug) out_sys("bind");
+
+    Listen(fd, 5);
+    char str[80];
+    sprintf(str, "bancs handler listen on 0.0.0.0:%d", cport);
+    out_sys(str);
+
+    for(;;) {
+        connfd = Accept(fd, (struct sockaddr *)&card_from_bancs, &card_from_bancs_len);
+        char *peer = Getpeername(connfd);
+        out_sys(concat("connection from bancs ", peer));
+
+        for(;;) {
+            char header[5];
+            Readn(connfd, header, 5);
+            header[5] = '\0';
+            int datalen = extlength(header);
+
+            if(datalen <= 0) {
+                char str[80];
+                sprintf(str, "peer %s exit", peer);
+                if(debug) out_sys(str);
+                break;
+            }
+
+            char message[datalen];
+            Readn(connfd, message, datalen);
+            message[datalen] = '\0';
+
+            char *total = concat(header, message);
+            total[datalen + 5] = '\0';
+
+            char str[80];
+            sprintf(str, "receive message from %s, message length: %d, total length: %d", peer, datalen, strlen(total));
+            out_sys(str);
+
+            write(p[1], total, datalen + 5);
+            if(debug) {
+                out_sys(concat("add message to pipe, message: ", total));
+            }
+
+            memset(header, 0, 5);
+            memset(message, 0, datalen); write(p[1], total, datalen + 5);
+        }
+
+        Close(connfd);
+    }
+
+    
+}
+
+void CardToBancsInit() {
+
+    struct addrinfo *dest;
+    if(getaddrinfo(host, NULL, NULL, &dest)!=0)
+      err_sys("badhostname");
+
+    memset(&card_to_bancs, 0, sizeof(&card_to_bancs));
+    memcpy((void*)&card_to_bancs,(void*)dest->ai_addr, dest->ai_addrlen);
+
+    ((struct sockaddr_in *)&card_to_bancs)->sin_port = htons(port);
+
+    fd_to_bancs = Socket(AF_INET, SOCK_STREAM, 0);
+    if(debug) {
+        char str[80];
+        sprintf(str, "to bancs socket, sock fd: %d", fd_to_bancs);
+        out_sys(str);
+    }
+
+    Connect(fd_to_bancs, (struct sockaddr *)&card_to_bancs, sizeof(card_to_bancs));
+    out_sys(concat("connect to bancs ", host));
 
 }
+
+
 
 int Socket(int family, int type, int protocol)
 {
