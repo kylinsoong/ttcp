@@ -141,6 +141,15 @@ ssize_t  readn(int, void *, size_t);
 int      extlength(void *);
 
 void     WriteToSock(int);
+void     ReadFromSock(int);
+
+
+/* 1 - bancs to card 
+ * 2 - card to bancs
+ * 3 - bancs from card
+ * 4 - card from bancs
+ * */
+int hint = 0 ;
 
 
 /*
@@ -253,6 +262,8 @@ int main(int argc, char **argv)
             BancsFromCardHandler();
         } else {
 
+            hint = 1;
+
             sleep(lazy * 10);
 
             BancsToCardInit();
@@ -272,6 +283,8 @@ int main(int argc, char **argv)
     } else if (rc == 0) {
         CardFromBancsHandler();
     } else {
+
+        hint = 2;
 
         sleep(lazy * 10); 
 
@@ -316,46 +329,14 @@ void InboundHandler() {
   out_sys(str);
 
   for(;;) {
+
     connfd = Accept(fd, (struct sockaddr *)&bancs_from_esb, &bancs_from_esb_len);
 
-    char *peer = Getpeername(connfd);
-
-    for(;;) {
-        char header[5];
-        Readn(connfd, header, 5);
-        header[5] = '\0';
-        int datalen = extlength(header);
-
-        if(datalen <= 0) {
-            char str[80];
-            sprintf(str, "peer %s exit", peer);
-            if(debug) out_sys(str);
-            break;
-        }
-
-        char message[datalen];
-        Readn(connfd, message, datalen);
-        message[datalen] = '\0';
-
-        char *total = concat(header, message);
-        total[datalen + 5] = '\0';
-        
-        char str[80];
-        sprintf(str, "receive message from %s, message length: %d, total length: %d", peer, datalen, strlen(total));
-        out_sys(str);
-      
-        
-        write(p[1], total, datalen + 5);
-        if(debug) {
-            out_sys(concat("add message to pipe, message: ", total));
-        }
-
-        memset(header, 0, 5);
-        memset(message, 0, datalen);
-    }
+    ReadFromSock(connfd);
 
     Close(connfd);
   }
+
 }
 
 /*
@@ -461,46 +442,13 @@ void CardFromBancsHandler() {
     out_sys(str);
 
     for(;;) {
+
         connfd = Accept(fd, (struct sockaddr *)&card_from_bancs, &card_from_bancs_len);
-        char *peer = Getpeername(connfd);
-        out_sys(concat("connection from bancs ", peer));
 
-        for(;;) {
-            char header[5];
-            Readn(connfd, header, 5);
-            header[5] = '\0';
-            int datalen = extlength(header);
-
-            if(datalen <= 0) {
-                char str[80];
-                sprintf(str, "peer %s exit", peer);
-                if(debug) out_sys(str);
-                break;
-            }
-
-            char message[datalen];
-            Readn(connfd, message, datalen);
-            message[datalen] = '\0';
-
-            char *total = concat(header, message);
-            total[datalen + 5] = '\0';
-
-            char str[80];
-            sprintf(str, "receive message from %s, message length: %d, total length: %d", peer, datalen, strlen(total));
-            out_sys(str);
-
-            write(p[1], total, datalen + 5);
-            if(debug) {
-                out_sys(concat("add message to pipe, message: ", total));
-            }
-
-            memset(header, 0, 5);
-            memset(message, 0, datalen); write(p[1], total, datalen + 5);
-        }
+        ReadFromSock(connfd);
 
         Close(connfd);
     }
-
     
 }
 
@@ -555,7 +503,13 @@ void  WriteToSock(int fd) {
         inbuf[datalen + 5] = '\0';
 
         Writen(fd, inbuf, strlen(inbuf));
-        out_sys(concat("response message to bancs, message: ", inbuf));
+
+        if(hint == 1) {
+            out_sys(concat("request message to card, message: ", inbuf));
+        } else if (hint == 2) {
+            out_sys(concat("response message to bancs, message: ", inbuf));
+        }
+
         memset(inbuf, 0, strlen(inbuf));
     }
 
@@ -564,6 +518,56 @@ void  WriteToSock(int fd) {
         char str[80];
         sprintf(str, "process %d terminated", subpid);
         out_sys(str);
+    }
+
+}
+
+/*
+ * The ReadFromSock method be used by listener, read the message from connection sock fd, and add message to a pipe.
+ *
+ * The ReadFromSock only for one specific connection sock fd, if connfd is closed ot broken, this methods will throw exception.
+ * 
+ * The read from connfd will repeatedly, till the connfd be broken. 
+ *
+ */
+void ReadFromSock(int connfd) {
+
+    char *peer = Getpeername(connfd);
+        
+    out_sys(concat("connection from ", peer));
+
+    for(;;) {
+
+        char header[5];
+        Readn(connfd, header, 5);
+        header[5] = '\0';
+        int datalen = extlength(header);
+
+        if(datalen <= 0) {
+            char str[80];
+            sprintf(str, "peer %s exit", peer);
+            out_sys(str);
+            break;
+        }
+
+        char message[datalen];
+        Readn(connfd, message, datalen);
+        message[datalen] = '\0';
+
+        char *total = concat(header, message);
+        total[datalen + 5] = '\0';
+
+        char str[80];
+        sprintf(str, "receive message from %s, message length: %d, total length: %d", peer, datalen, strlen(total));
+        out_sys(str);
+
+        write(p[1], total, datalen + 5);
+        if(debug) {
+            out_sys(concat("add message to pipe, message: ", total));
+        }
+
+        memset(header, 0, 5);
+        memset(message, 0, datalen); write(p[1], total, datalen + 5);
     }
 
 }
