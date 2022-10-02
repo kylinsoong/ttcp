@@ -103,7 +103,7 @@ Usage: bancs -e [-options] <host of BANCS> \n\
        bancs -c [-options] <host of BANCS>\n\
 Common options:\n\
         -d      enable debug logging\n\
-        -l ##   the length of lazy sock write/read time (default 2 seconds)\n\
+        -l ##   the length of lay time of Init wait Listener (default 8 seconds, which means once Listener init finished and 8 * 10 seconds later, the Init start)\n\
         -p ##   port number to send to or listen at (default 8805/8806 9805)\n\
 ";
 
@@ -139,6 +139,8 @@ ssize_t  Readn(int, void *, size_t);
 ssize_t  writen(int, const void *, size_t);
 ssize_t  readn(int, void *, size_t);
 int      extlength(void *);
+
+void     WriteToSock(int);
 
 
 /*
@@ -255,40 +257,10 @@ int main(int argc, char **argv)
 
             BancsToCardInit();
 
-            int nbytes;
-            char inbuf[MAX_DATA_LINE];
-            while ((nbytes = read(p[0], inbuf, MAX_DATA_LINE)) > 0) {
-                char header[5];
-                strncpy(header, inbuf, 5);
-                int datalen = extlength(header);
-
-                inbuf[datalen + 5] = '\0'; 
-
-                if(debug) {
-                    char extMessage[MAX_DATA_LINE];
-                    sprintf(extMessage, "extract message from pipe, message length: %d, header: %s, total length: %d, message: %s", datalen, header, strlen(inbuf), inbuf);
-                    out_sys(extMessage);
-                }          
-
-                inbuf[datalen + 5] = '\0'; 
-
-                Writen(fd_to_card, inbuf, strlen(inbuf));               
-                out_sys(concat("request message to card, message: ", inbuf));
-                memset(inbuf, 0, strlen(inbuf));
-            }
-           
-            int subpid, status;
-            while((subpid = waitpid(-1, &status, 0)) > 0) {
-                char str[80];
-                sprintf(str, "process %d terminated", subpid);
-                out_sys(str);
-            }
+            WriteToSock(fd_to_card);
 
         }           
-
-
      } 
-
   } else if(server == 2) {
 
     out_sys("start");
@@ -300,31 +272,12 @@ int main(int argc, char **argv)
     } else if (rc == 0) {
         CardFromBancsHandler();
     } else {
+
         sleep(lazy * 10); 
 
         CardToBancsInit();
 
-        int nbytes;
-        char inbuf[MAX_DATA_LINE];
-        while ((nbytes = read(p[0], inbuf, MAX_DATA_LINE)) > 0) {
-            char header[5];
-            strncpy(header, inbuf, 5);
-            int datalen = extlength(header);
-
-            inbuf[datalen + 5] = '\0';
-
-            if(debug) {
-                char extMessage[MAX_DATA_LINE];
-                sprintf(extMessage, "extract message from pipe, message length: %d, header: %s, total length: %d, message: %s", datalen, header, strlen(inbuf), inbuf);
-                out_sys(extMessage);
-            }
-
-            inbuf[datalen + 5] = '\0';
-
-            Writen(fd_to_bancs, inbuf, strlen(inbuf));
-            out_sys(concat("response message to bancs, message: ", inbuf));
-            memset(inbuf, 0, strlen(inbuf));
-        }
+        WriteToSock(fd_to_bancs);
     }
 
   }
@@ -574,6 +527,46 @@ void CardToBancsInit() {
 
 }
 
+/*
+ * The WriteToSock methods can only be invoked by main thread.
+ *
+ * Firstly, read the message from pipe and write to sock fd.
+ *
+ * Secondly, if read pipe error,  the main thrads will wait for all son thrads to finish, then exit.
+ *
+ */
+void  WriteToSock(int fd) {
+
+    int nbytes;
+    char inbuf[MAX_DATA_LINE];
+    while ((nbytes = read(p[0], inbuf, MAX_DATA_LINE)) > 0) {
+        char header[5];
+        strncpy(header, inbuf, 5);
+        int datalen = extlength(header);
+
+        inbuf[datalen + 5] = '\0';
+
+        if(debug) {
+            char extMessage[MAX_DATA_LINE];
+            sprintf(extMessage, "extract message from pipe, message length: %d, header: %s, total length: %d, message: %s", datalen, header, strlen(inbuf), inbuf);
+            out_sys(extMessage);
+        }
+
+        inbuf[datalen + 5] = '\0';
+
+        Writen(fd, inbuf, strlen(inbuf));
+        out_sys(concat("response message to bancs, message: ", inbuf));
+        memset(inbuf, 0, strlen(inbuf));
+    }
+
+    int subpid, status;
+    while((subpid = waitpid(-1, &status, 0)) > 0) {
+        char str[80];
+        sprintf(str, "process %d terminated", subpid);
+        out_sys(str);
+    }
+
+}
 
 
 int Socket(int family, int type, int protocol)
