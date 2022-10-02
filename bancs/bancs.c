@@ -30,6 +30,14 @@
  *
  * 1. Client ESB load the ISO8583 Message from '/etc/bancs.data', which the file keep bunch of Messages, one message per linem, and send to Bancs via 1 connection.
  * 2. All Handler contains a listened entrypoint, and started as a separate threads  
+ *    
+ *      Sub threads use pipe to write the message received from socket
+ *
+ * RUN ON SINGLE LINUX SERVER:
+ *
+ *   ./a.out -b -d -l 1 127.0.0.1
+ *   ./a.out -c -d -l 1 127.0.0.1
+ *   ./a.out -e 127.0.0.1     
  *
  *
  */
@@ -59,7 +67,7 @@ int domain, fromlen, bancs_from_esb_len, bancs_from_card_len, card_from_bancs_le
 int fd, fd_bancs, fd_to_card, fd_to_bancs;                 /* fd of network socket */
 int connfd, connfd_bancs;
 
-int lazy = 2;
+int lazy = 8;
 
 short port = 8805;
 short cport = 8806;               /* TCP port number */
@@ -98,6 +106,7 @@ char     *Getpeername(int);
 
 void     InboundHandler(void);
 void     BancsFromCardHandler(void);
+void     BancsToCardInit(void);
 
 /* IO */
 void     Close(int);
@@ -229,46 +238,37 @@ int main(int argc, char **argv)
             BancsFromCardHandler();
         } else {
 
-            sleep(lazy * 5);
+            sleep(lazy * 10);
 
-            struct addrinfo *dest;
-            if(getaddrinfo(host, NULL, NULL, &dest)!=0)
-                err_sys("badhostname");
+            BancsToCardInit();
 
-            memset(&bancs_to_card, 0, sizeof(&bancs_to_card));
-            memcpy((void*)&bancs_to_card,(void*)dest->ai_addr, dest->ai_addrlen);
-
-            ((struct sockaddr_in *)&bancs_to_card)->sin_port = htons(cport);
-
-            fd_to_card = Socket(AF_INET, SOCK_STREAM, 0);
-            if(debug) out_sys("socket");
-
-            Connect(fd_to_card, (struct sockaddr *)&bancs_to_card, sizeof(bancs_to_card));
-            out_sys(concat("connect to card ", host));
 
             int nbytes;
             char inbuf[MAX_DATA_LINE];
             while ((nbytes = read(p[0], inbuf, MAX_DATA_LINE)) > 0) {
-                
-                char strmsglen[5];
-                strncpy(strmsglen, bufr, 5);
-                int len = extlength(strmsglen) + 5;
-                inbuf[len] = '\0'; 
+                char header[5];
+                strncpy(header, inbuf, 5);
+                int datalen = extlength(header);
+
+                inbuf[datalen + 5] = '\0'; 
 
                 if(debug) {
-                    char str[80 + len];
-                    sprintf(str, "extract message from pipe, message length: %d, message: %s", strlen(inbuf), inbuf);
-                    out_sys(str);
+                    char extMessage[MAX_DATA_LINE];
+                    sprintf(extMessage, "extract message from pipe, message length: %d, header: %s, total length: %d, message: %s", datalen, header, strlen(inbuf), inbuf);
+                    out_sys(extMessage);
                 }          
+
+                inbuf[datalen + 5] = '\0'; 
 
                 Writen(fd_to_card, inbuf, strlen(inbuf));               
                 out_sys(concat("request message to card, message: ", inbuf));
+                memset(inbuf, 0, strlen(inbuf));
             }
            
             int subpid, status;
             while((subpid = waitpid(-1, &status, 0)) > 0) {
                 char str[80];
-                sprintf(str, "process %d terminated, errno: %d", subpid, errno);
+                sprintf(str, "process %d terminated", subpid);
                 out_sys(str);
             }
 
@@ -324,12 +324,12 @@ int main(int argc, char **argv)
       header[5] = '\0';
       int datalen = extlength(header);
 
-/*
+
       if(datalen <= 0) {
          out_sys("bancs closed the connection"); 
          break;
       }
-*/
+
       char message[datalen];
       Readn(connfd, message, datalen);
       message[datalen] = '\0';
@@ -367,7 +367,11 @@ void InboundHandler() {
 
   ((struct sockaddr_in *)&bancs_esb_ss)->sin_port = htons(inport);
   fd = Socket(AF_INET, SOCK_STREAM, 0);
-  if(debug) out_sys("inbound handler socket");
+  if(debug) {
+        char str[80];
+        sprintf(str, "inbound handler socket, sock fd: %d", fd);
+        out_sys(str);
+    }
 
   Bind(fd, (struct sockaddr *)&bancs_esb_ss, sizeof(bancs_esb_ss));
   if(debug) out_sys("inbound handler bind");
@@ -400,12 +404,17 @@ void InboundHandler() {
         message[datalen] = '\0';
 
         char *total = concat(header, message);
-
+        total[datalen + 5] = '\0';
+        
         char str[80];
-        sprintf(str, "inbound message from %s, message length: %d, message: %s", peer, datalen, total);
+        sprintf(str, "inbound message from %s, message length: %d, total length: %d", peer, datalen, strlen(total));
         out_sys(str);
-
+      
+        
         write(p[1], total, datalen + 5);
+        if(debug) {
+            out_sys(concat("add message to pipe, message: ", total));
+        }
 
         memset(header, 0, 5);
         memset(message, 0, datalen);
@@ -430,7 +439,11 @@ void BancsFromCardHandler() {
 
     ((struct sockaddr_in *)&bancs_card_ss)->sin_port = htons(port);
     fd_bancs = Socket(AF_INET, SOCK_STREAM, 0);
-    if(debug)out_sys("socket");
+    if(debug) {
+        char str[80];
+        sprintf(str, "from card socket, sock fd: %d", fd_bancs);
+        out_sys(str);
+    }
 
     Bind(fd_bancs, (struct sockaddr *)&bancs_card_ss, sizeof(bancs_card_ss));
     if(debug)out_sys("bind");
@@ -454,7 +467,7 @@ void BancsFromCardHandler() {
 
             if(datalen <= 0) {
                 char str[80];
-                sprintf(str, "CARD %s exit, header: %s, length: %d", peer, header, datalen);
+                sprintf(str, "CARD %s response illegal message, header: %s, header length: %d, data length: %d", peer, header, strlen(header), datalen);
                 out_sys(str);
                 break;
             }
@@ -466,6 +479,31 @@ void BancsFromCardHandler() {
             out_sys(concat("response message from card, message: ", total)); // TODO- add to parse ISO8583 to extract specific bit position.  
         }
     }
+
+}
+
+void BancsToCardInit() {
+
+    struct addrinfo *dest;
+    if(getaddrinfo(host, NULL, NULL, &dest)!=0)
+        err_sys("badhostname");
+
+    memset(&bancs_to_card, 0, sizeof(&bancs_to_card));
+    memcpy((void*)&bancs_to_card,(void*)dest->ai_addr, dest->ai_addrlen);
+
+    ((struct sockaddr_in *)&bancs_to_card)->sin_port = htons(cport);
+
+    fd_to_card = Socket(AF_INET, SOCK_STREAM, 0);
+    if(debug) {
+        char str[80];
+        sprintf(str, "to card socket, sock fd: %d", fd_to_card);
+        out_sys(str);
+    } 
+
+    Connect(fd_to_card, (struct sockaddr *)&bancs_to_card, sizeof(bancs_to_card));
+    out_sys(concat("connect to card ", host));
+
+
 
 }
 
