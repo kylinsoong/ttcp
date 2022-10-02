@@ -85,7 +85,7 @@ short cport = 8806;               /* TCP port number */
 short inport = 9805; 
 
 char *host;                     /* ptr to name of host */
-int server = 1;                 /* 0=esb, 1=bancs, 3=card */
+int server = 1;                 /* 0=esb, 1=bancs, 2=card, 3=tools */
 int debug = 0 ;
 
 int p[2];
@@ -97,14 +97,21 @@ extern int errno;
 extern int optind;
 extern char *optarg;
 
+int num = 3;      /* how many messages to generate */
+int kind = 1562;  /* how long a message should be, currently support 1562 */
+
 char Usage[] = "\
 Usage: bancs -e [-options] <host of BANCS> \n\
        bancs -b [-options] <host of CARD>\n\
        bancs -c [-options] <host of BANCS>\n\
+       bancs -t [-options]\n\
 Common options:\n\
         -d      enable debug logging\n\
         -l ##   the length of lay time of Init wait Listener (default 8 seconds, which means once Listener init finished and 8 * 10 seconds later, the Init start)\n\
         -p ##   port number to send to or listen at (default 8805/8806 9805)\n\
+Common options for -t:\n\
+        -n ##   total number of message to generated\n\
+        -k ##   specify message kinds, different kinds means different length, 1 - 1562\n\
 ";
 
 /* Socket */
@@ -143,6 +150,8 @@ int      extlength(void *);
 void     WriteToSock(int);
 void     ReadFromSock(int);
 
+void     generate(int, int);
+char     *leftpadding(int, int, char);
 
 /* 1 - bancs to card 
  * 2 - card to bancs
@@ -162,7 +171,7 @@ int main(int argc, char **argv)
 
     // parse the main argv
     int c;
-    while ((c = getopt(argc, argv, "ebcdl:p:")) != -1) {
+    while ((c = getopt(argc, argv, "ebctdl:p:n:k:")) != -1) {
         switch (c) {
         case 'e':
             server = 0;
@@ -173,6 +182,9 @@ int main(int argc, char **argv)
         case 'c':
             server = 2;
             break;
+        case 't':
+            server = 3;
+            break;
         case 'p':
             port = atoi(optarg);
             cport = port + 1;
@@ -181,22 +193,36 @@ int main(int argc, char **argv)
         case 'd':
             debug = 1;
             break;
+        case 'n':
+            num = atoi(optarg);
+            break;
         case 'l':
             lazy = atoi(optarg);
+            break;
+        case 'k':
+            kind = atoi(optarg);
+            if(kind == 1) {
+                kind = 1562;
+            } else if (kind = 2) {
+                kind = 864;
+            }
             break;
         default:
             goto usage;
         }
     }
 
+    if( server == 0 || server == 1 || server == 2) {
 
-    if (optind == argc) {
-        goto usage;
+        if (optind == argc) {
+            goto usage;
+        }
+  
+        host = argv[optind];
+
+        if (pipe(p) < 0)
+            err_sys("pipe");
     }
-    host = argv[optind];
-
-    if (pipe(p) < 0)
-        err_sys("pipe");
 
   if(server == 0) {
 
@@ -293,6 +319,12 @@ int main(int argc, char **argv)
         WriteToSock(fd_to_bancs);
     }
 
+  } else if(server == 3) {
+      
+      out_sys("generate messages");
+
+      generate(num, kind);
+
   }
 
   return 1;
@@ -301,6 +333,7 @@ int main(int argc, char **argv)
     fprintf(stderr,Usage);
     exit(1);
 }
+
 
 /**
  * Handle the client request 
@@ -666,6 +699,8 @@ void err_sys(const char *fmt, ...)
         role = "BANCS";
     else if (server == 2)
         role = "CARD";
+    else if (server == 3)
+        role = "TOOLS";
 
     //perror(fmt);
     fprintf(stderr,"%s error, errno=%d, msg=%s\n", role, errno, fmt);
@@ -686,6 +721,8 @@ void out_sys(const char *fmt, ...)
         role = "BANCS";
     else if (server == 2)
         role = "CARD";
+    else if (server == 3)
+        role = "TOOLS";
 
     char cur_time[128];
     struct tm*  ptm;
@@ -856,3 +893,44 @@ int extlength(void *vptr)
     return msglen;
 }
 
+void generate(int num, int kind) {
+
+    int i, j;
+    for(i = 0 ; i < num ; i ++) {
+       
+        char *message = malloc(kind +5);
+
+        // header: length: 5
+        char *header = leftpadding(5, kind, '-');
+        message = concat(header, "        ");
+
+        printf("header: %s\n", header);
+        printf("length: %d, message: %s\n", strlen(message), message);
+    }
+
+}
+
+char *leftpadding(int length, int value, char c) {
+
+    char *result = malloc(length);
+
+    char text[30];
+    sprintf(text, "%d", value);
+    int len = strlen(text);
+    text[len] = '\0';
+
+    int pad = length - len;
+    if(pad > 0) {
+        char content[pad];
+        content[pad] = '\0';
+        int i ;
+        for (i = 0 ; i < pad ; i ++) {
+            content[i] = c ;
+        }
+        result = concat(content, text);
+    } else {
+        result = text;
+    }
+
+    return result;
+}
