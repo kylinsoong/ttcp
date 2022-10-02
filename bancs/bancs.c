@@ -59,8 +59,6 @@ int domain, fromlen, bancs_from_esb_len, bancs_from_card_len, card_from_bancs_le
 int fd, fd_bancs, fd_to_card, fd_to_bancs;                 /* fd of network socket */
 int connfd, connfd_bancs;
 
-static int *glob_fd_to_card;
-
 int lazy = 2;
 
 short port = 8805;
@@ -71,6 +69,7 @@ char *host;                     /* ptr to name of host */
 int server = 1;                 /* 0=esb, 1=bancs, 3=card */
 int debug = 0 ;
 
+int p[2];
 
 FILE * fp;
 char bufr[MAX_DATA_LINE];
@@ -163,6 +162,9 @@ int main(int argc, char **argv)
     }
     host = argv[optind];
 
+    if (pipe(p) < 0)
+        err_sys("pipe");
+
   if(server == 0) {
 
     out_sys("start");
@@ -211,15 +213,12 @@ int main(int argc, char **argv)
 
     out_sys("start");
 
-    glob_fd_to_card = mmap(NULL, sizeof *glob_fd_to_card, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-
     Signal(SIGCHLD, sig_chld);
     int rc = fork();
     if (rc < 0 ) {
       err_sys("Error:unable to create thread");
     } else if ( rc == 0) {
-      //InboundHandler();
-      BancsFromCardHandler();
+      InboundHandler();
     } else {
 
         Signal(SIGCHLD, sig_chld);
@@ -227,10 +226,8 @@ int main(int argc, char **argv)
         if(src < 0) {
             err_sys("Error:unable to create thread");
         } else if (src == 0) {
-            //BancsFromCardHandler();
-            InboundHandler();
+            BancsFromCardHandler();
         } else {
-
 
             sleep(lazy * 5);
 
@@ -248,9 +245,26 @@ int main(int argc, char **argv)
 
             Connect(fd_to_card, (struct sockaddr *)&bancs_to_card, sizeof(bancs_to_card));
             out_sys(concat("connect to card ", host));
-           
-            *glob_fd_to_card = fd_to_card ;
 
+            int nbytes;
+            char inbuf[MAX_DATA_LINE];
+            while ((nbytes = read(p[0], inbuf, MAX_DATA_LINE)) > 0) {
+                
+                char strmsglen[5];
+                strncpy(strmsglen, bufr, 5);
+                int len = extlength(strmsglen) + 5;
+                inbuf[len] = '\0'; 
+
+                if(debug) {
+                    char str[80 + len];
+                    sprintf(str, "extract message from pipe, message length: %d, message: %s", strlen(inbuf), inbuf);
+                    out_sys(str);
+                }          
+
+                Writen(fd_to_card, inbuf, strlen(inbuf));               
+                out_sys(concat("request message to card, message: ", inbuf));
+            }
+           
             int subpid, status;
             while((subpid = waitpid(-1, &status, 0)) > 0) {
                 char str[80];
@@ -347,23 +361,6 @@ int main(int argc, char **argv)
 void InboundHandler() {
 
   out_sys("inbound handler start");
-/*  
-  struct addrinfo *dest;
-  if(getaddrinfo(host, NULL, NULL, &dest)!=0)
-    err_sys("badhostname");
-
-  memset(&bancs_to_card, 0, sizeof(&bancs_to_card));
-  memcpy((void*)&bancs_to_card,(void*)dest->ai_addr, dest->ai_addrlen);
-
-  ((struct sockaddr_in *)&bancs_to_card)->sin_port = htons(cport);
-
-  fd_to_card = Socket(AF_INET, SOCK_STREAM, 0);
-  if(debug) out_sys("socket");
-
-  Connect(fd_to_card, (struct sockaddr *)&bancs_to_card, sizeof(bancs_to_card));
-  out_sys(concat("connect to card ", host));
-
-*/
 
   memset(&bancs_esb_ss, 0, sizeof(&bancs_esb_ss));
   memset(&bancs_from_esb, 0, sizeof(&bancs_from_esb));
@@ -385,20 +382,6 @@ void InboundHandler() {
 
     char *peer = Getpeername(connfd);
 
-    while(*glob_fd_to_card <= 0) {
-        out_sys("BANCS TO CARD Connection is not initialized\n");
-        sleep(lazy * 3);
-    }
-
-/*
-  Snnipts: open socket fd in sub threads.
-    char fd_path[64];
-    snprintf(fd_path, sizeof(fd_path), "/proc/%d/fd/%d", getppid(), *glob_fd_to_card);
-    int new_fd = open(fd_path, O_RDWR);
-    char strs[80];
-    sprintf(strs, "open new sock fd: %d", new_fd);
-    out_sys(strs);   
-*/
     for(;;) {
         char header[5];
         Readn(connfd, header, 5);
@@ -408,7 +391,7 @@ void InboundHandler() {
         if(datalen <= 0) {
             char str[80];
             sprintf(str, "CLIENT %s exit", peer);
-            out_sys(str);
+            if(debug) out_sys(str);
             break;
         }
 
@@ -418,25 +401,12 @@ void InboundHandler() {
 
         char *total = concat(header, message);
 
-/*
-        while(*glob_fd_to_card <= 0) {
-            out_sys("BANCS TO CARD Connection is not initialized\n");
-            sleep(lazy * 3);
-        }
-
-printf("fd_to_card: %d, message: %s\n", fd_to_card, total);
-sleep(3);
-memset(header, 0, 5);
-memset(message, 0, datalen);
-continue;
-*/
-        int sock_fd_to_card = *glob_fd_to_card;
         char str[80];
-        sprintf(str, "inbound message from %s, message length: %d, ppid: %d, sock fd: %d", peer, datalen, getppid(), *glob_fd_to_card);
+        sprintf(str, "inbound message from %s, message length: %d, message: %s", peer, datalen, total);
         out_sys(str);
-        Writen(sock_fd_to_card, total, datalen + 5);
-        out_sys(concat("request message to card, message: ", total));
-        
+
+        write(p[1], total, datalen + 5);
+
         memset(header, 0, 5);
         memset(message, 0, datalen);
     }
@@ -484,7 +454,7 @@ void BancsFromCardHandler() {
 
             if(datalen <= 0) {
                 char str[80];
-                sprintf(str, "CARD %s exit", peer);
+                sprintf(str, "CARD %s exit, header: %s, length: %d", peer, header, datalen);
                 out_sys(str);
                 break;
             }
@@ -497,22 +467,6 @@ void BancsFromCardHandler() {
         }
     }
 
-/*
-    connfd_bancs = Accept(fd_bancs, (struct sockaddr *)&bancs_from_card, &bancs_from_card_len);
-    char *peer = Getpeername(connfd_bancs);
-    out_sys(concat("conn from card: ", peer));
-    for(;;) {
-        char header[5];
-        Readn(connfd_bancs, header, 5);
-        header[5] = '\0';
-        int datalen = extlength(header);
-        char message[datalen];
-        Readn(connfd_bancs, message, datalen);
-        message[datalen] = '\0';
-        char *total = concat(header, message);
-        out_sys(concat("response message from card, message: ", total));
-    }
-*/
 }
 
 int Socket(int family, int type, int protocol)
