@@ -7,7 +7,7 @@ To use TTCP, start the receiver on one side of the path, then start the transmit
 [source, bash]
 .*Install TTCP*
 ----
-rpm -ivh ttcp-1.12-1.x86_64.rpm
+rpm -ivh ttcp-1.13-2.x86_64.rpm
 ----
 
 Either edit the options in `/etc/ttcp.conf` prior to TTCP starting, or pass options as arguments while TTCP starting

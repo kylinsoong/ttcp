@@ -1,12 +1,56 @@
 = BANCS
 :toc: manual
 
+== What's this?
+
+This is sample program for simulate Core Bank System.
+
+----
+ *  _______
+ * |       |
+ * |  ESB  | 
+ * |       |
+ *  -------  
+ *     | request
+ *     |
+ *     |
+ *  -------  request          _______
+ * |       |-----------------|       |
+ * | BANCS |                 |  CARD |
+ * |       |-----------------|       |
+ *  -------        response   -------
+----
+
+1. BANCS listen on 9805, 8805, CARD listen on 8806, BANCS connect to CARD via 8806(mark as connection 1), CARD connect to BANCS via 8805(mark as connection 2)
+2. A client simulate ESB send the request message to BANCS via 9902 which listened by BANCS
+3. BANCS forward request message to CARD
+4. CARD send response message to BANCS
+
+DESIGN PRINCIPLES:
+
+1. Client ESB load the ISO8583 Message from '/etc/bancs.data', which the file keep bunch of Messages, one message per linem, and send to Bancs via 1 connection.
+ 
+2. All Handler contains a listened entrypoint, and started as a separate threads  
+    
+      Sub threads use pipe to write the message received from socket, main thread read message from pipe, and send the message via write sock fd.
+      3 Handler are 3 separate threads, 2 Init be invoked by main thread. The BANCS has 2 Handler and 1 Init; the CARD has 1 Handler and 1 Init.
+
+      Inbound sequence(N/S from ESB, E/W from BANCS to CARD):
+
+          ESB  -  BANCS's InboundHandler  -  BANCS's BancsToCardInit  -  CARD's CardFromBancsHandler   
+
+      Outbound sequence(E/W from CARD to BANCS):
+
+          CARD's CardToBancsInit  -  BANCS's BancsFromCardHandler    
+
+ 3. ISO8583 compatible, a tools used for generate ISO message
+
 == Install
 
 [source, bash]
 .*Install on x86*
 ----
-rpm -ivh ttcp-1.13-1.x86_64.rpm
+rpm -ivh ttcp-1.13-2.x86_64.rpm
 ----
 
 [source, bash]
@@ -50,47 +94,42 @@ NOTE: `10.1.10.205` is the host to run CARD, `10.1.20.203` is the host to run BA
 ----
 // process on BANCS
 ~]# ps -ef | grep bancs
-root       1621   1557  0 11:00 pts/0    00:00:00 bancs -b 10.1.10.205
-root       1622   1621  0 11:00 pts/0    00:00:00 bancs -b 10.1.10.205
+root       2176   2146  0 16:55 pts/0    00:00:00 bancs -b 10.1.10.205
+root       2177   2176  0 16:55 pts/0    00:00:00 bancs -b 10.1.10.205
+root       2178   2176  0 16:55 pts/0    00:00:00 bancs -b 10.1.10.205
 
-// tcp connections on BANCS
+// tcp connections on BANCS(BANCS connect to CARD's 8806, CARD connecto BANCS's 8805)
 ~]# netstat -antulop | grep bancs
-tcp        0      0 0.0.0.0:8805            0.0.0.0:*               LISTEN      1621/bancs           off (0.00/0/0)
-tcp        0      0 0.0.0.0:9805            0.0.0.0:*               LISTEN      1622/bancs           off (0.00/0/0)
-tcp        0      0 10.1.20.203:8805        10.1.20.1:50665         ESTABLISHED 1621/bancs           off (0.00/0/0)
-tcp        0      0 10.1.20.203:37820       10.1.10.205:8806        ESTABLISHED 1622/bancs           off (0.00/0/0)
+tcp        0      0 0.0.0.0:9805            0.0.0.0:*               LISTEN      2177/bancs           off (0.00/0/0)
+tcp        0      0 0.0.0.0:8805            0.0.0.0:*               LISTEN      2178/bancs           off (0.00/0/0)
+tcp        0      0 10.1.20.203:52400       10.1.10.205:8806        ESTABLISHED 2176/bancs           off (0.00/0/0)
+tcp        0      0 10.1.20.203:8805        10.1.20.1:60293         ESTABLISHED 2178/bancs           off (0.00/0/0)
 
 // process on CARD
 ~]# ps -ef | grep bancs
-root       3846   1227  0 10:59 pts/1    00:00:00 bancs -c 10.1.20.203
+root       8385   3318  0 16:55 pts/2    00:00:00 bancs -c 10.1.20.203
+root       8386   8385  0 16:55 pts/2    00:00:00 bancs -c 10.1.20.203
 
 // tcp connections on CARD
 ~]# netstat -antulop | grep bancs
-tcp        0      0 0.0.0.0:8806            0.0.0.0:*               LISTEN      3846/bancs           off (0.00/0/0)
-tcp        0      0 10.1.10.205:56124       10.1.20.203:8805        ESTABLISHED 3846/bancs           off (0.00/0/0)
-tcp        0      0 10.1.10.205:8806        10.1.10.1:50659         ESTABLISHED 3846/bancs           off (0.00/0/0)
+tcp        0      0 0.0.0.0:8806            0.0.0.0:*               LISTEN      8386/bancs           off (0.00/0/0)
+tcp        0      0 10.1.10.205:8806        10.1.10.1:60292         ESTABLISHED 8386/bancs           off (0.00/0/0)
+tcp        0      0 10.1.10.205:39614       10.1.20.203:8805        ESTABLISHED 8385/bancs           off (0.00/0/0)
 ----
 
 [source, bash]
-.*4. Test*
+.*4. Generate Test Data(This will replace default one)*
 ----
-// send a message to BANCS which simulate a banks transaction from channel system like Mobile Bank app.
-~]# bancs -e 10.1.20.203
-25-Sep-2022 11:11:45 (3876) CLIENT: connect to bancs 10.1.20.203
-25-Sep-2022 11:11:45 (3876) CLIENT: send message to bancs
-25-Sep-2022 11:11:45 (3876) CLIENT: message: 2d313131363030303030313737303032343136393638..
-25-Sep-2022 11:11:45 (3876) CLIENT: exit
-
-// BANCS handle banks transaction, send request message to CARD
-25-Sep-2022 11:11:45 (1622) BANCS: inbound message from 10.1.20.1:51280, request message to card, message: 2d31313136303030303031373730303234313639363..
-
-// CARD process, and send response message to BANCS
-25-Sep-2022 11:11:45 (3846) CARD: receive request message from bancs: 2d313131363030303030313737303032343136393638303937303030303...
-25-Sep-2022 11:11:45 (3846) CARD: response message to bancs, message: 2d313131363030303030313737303032343136393638303937303030303...
-
-// BANCS receive response from CARD
-25-Sep-2022 11:11:45 (1621) BANCS: response message from card, message: 2d31313136303030303031373730303234313639363830393730303030303030...
+bancs -t -n 10 > /etc/bancs.data
 ----
+
+[source, bash]
+.*5. Test*
+----
+bancs -e -l 1 10.1.20.203
+----
+
+MOTE: Check the message be passed across the ESB, BANCS and CARD.
 
 === BIG-IP sit between BANCS and CARD
 

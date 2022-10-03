@@ -14,16 +14,16 @@
  *     | request
  *     |
  *     |
- *  -------  request       _______
- * |       |--------------|       |
- * | BANCS |              |  CARD |
- * |       |--------------|       |
- *  -------     response   -------
+ *  -------  request           _______
+ * |       |------------------|       |
+ * | BANCS |                  |  CARD |
+ * |       |------------------|       |
+ *  -------         response   -------
  *
  * 1. BANCS listen on 9805, 8805, CARD listen on 8806, BANCS connect to CARD via 8806(mark as connection 1), CARD connect to BANCS via 8805(mark as connection 2)
  * 2. A client simulate ESB send the request message to BANCS via 9902 which listened by BANCS
- * 2. BANCS forward request message to CARD
- * 3. CARD send response message to BANCS
+ * 3. BANCS forward request message to CARD
+ * 4. CARD send response message to BANCS
  *  
  *
  * DESIGN PRINCIPLES:
