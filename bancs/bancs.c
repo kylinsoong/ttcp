@@ -8,7 +8,7 @@
  * 
  *  _______
  * |       |
- * |ESB(MQ)| 
+ * |  ESB  | 
  * |       |
  *  -------  
  *     | request
@@ -29,6 +29,7 @@
  * DESIGN PRINCIPLES:
  *
  * 1. Client ESB load the ISO8583 Message from '/etc/bancs.data', which the file keep bunch of Messages, one message per linem, and send to Bancs via 1 connection.
+ * 
  * 2. All Handler contains a listened entrypoint, and started as a separate threads  
  *    
  *      Sub threads use pipe to write the message received from socket, main thread read message from pipe, and send the message via write sock fd.
@@ -42,14 +43,22 @@
  *
  *          CARD's CardToBancsInit  -  BANCS's BancsFromCardHandler    
  *
- * 3. ISO8583 compatible
+ * 3. ISO8583 compatible, a tools used for generate ISO message
+ *
  *
  * RUN ON SINGLE LINUX SERVER:
  *
+ *   Start bancs
  *   ./a.out -b -d -l 1 127.0.0.1
+ *
+ *   Start Card
  *   ./a.out -c -d -l 1 127.0.0.1
+ *  
+ *   Start Client
  *   ./a.out -e 127.0.0.1     
  *
+ *   Start Tools
+ *   ./a.out -t -n 10 > /etc/bancs.data 
  *
  */
 
@@ -99,6 +108,8 @@ extern char *optarg;
 
 int num = 3;      /* how many messages to generate */
 int kind = 1562;  /* how long a message should be, currently support 1562 */
+int m = 6;        /* 0 - 0100, 1 - 0110, 2 - 0200, 3 - 0210, 4 - 0240, 5 - 0250, 6 - 0400, 7 - 0410, 8 - 0800, 9 - 0810 */
+
 
 char Usage[] = "\
 Usage: bancs -e [-options] <host of BANCS> \n\
@@ -110,6 +121,7 @@ Common options:\n\
         -l ##   the length of lay time of Init wait Listener (default 8 seconds, which means once Listener init finished and 8 * 10 seconds later, the Init start)\n\
         -p ##   port number to send to or listen at (default 8805/8806 9805)\n\
 Common options for -t:\n\
+        -m ##   specify the version of the ISO8583 standard, allowed value are 0-9\n\
         -n ##   total number of message to generated\n\
         -k ##   specify message kinds, different kinds means different length, 1 - 1562\n\
 ";
@@ -171,7 +183,7 @@ int main(int argc, char **argv)
 
     // parse the main argv
     int c;
-    while ((c = getopt(argc, argv, "ebctdl:p:n:k:")) != -1) {
+    while ((c = getopt(argc, argv, "ebctdl:p:m:n:k:")) != -1) {
         switch (c) {
         case 'e':
             server = 0;
@@ -206,6 +218,9 @@ int main(int argc, char **argv)
             } else if (kind = 2) {
                 kind = 864;
             }
+            break;
+        case 'm':
+            m = atoi(optarg);
             break;
         default:
             goto usage;
@@ -321,7 +336,7 @@ int main(int argc, char **argv)
 
   } else if(server == 3) {
       
-      out_sys("generate messages");
+      if(debug) out_sys("generate messages");
 
       generate(num, kind);
 
@@ -904,8 +919,139 @@ void generate(int num, int kind) {
         char *header = leftpadding(5, kind, '-');
         message = concat(header, "        ");
 
-        printf("header: %s\n", header);
-        printf("length: %d, message: %s\n", strlen(message), message);
+        // mit: four numeric digits that specify the version of the ISO8583 standard.
+        char *mit = malloc(4);
+        switch (m) {
+            case 0 :
+                mit = "0100";  // Authorization Request
+                break;
+            case 1 :
+                mit = "0110";  // Request Response
+                break; 
+            case 2 :
+                mit = "0200";  // Acquirer Financial Request
+                break;
+            case 3 :
+                mit = "0210";  // Issuer Response to Financial Request
+                break;
+            case 4 :
+                mit = "0240";  // Query Transaction
+                break;
+            case 5 :
+                mit = "0250";  // Query Transaction Reply
+                break;
+            case 6 :
+                mit = "0400";  // Reversed Transaction 
+                break;
+            case 7 :
+                mit = "0410";  // Reversed Transaction Reply
+                break;
+            case 8 :
+                mit = "0800";  // Management Transaction
+                break;
+            case 9 :
+                mit = "0810";  // Management Transaction Reply
+                break;
+            default:
+                mit = "0400";  // Reversed Transaction 
+                break;      
+        }
+
+        message = concat(header, mit);
+       
+        // bitmap: 64 or 128
+        char *bm = "64  ";
+        message = concat(message, bm); 
+
+        // serialnum: length: 9
+        int serialnum = 500000000 + i ;
+        char serial[9];
+        sprintf(serial, "%d", serialnum);
+        message = concat(message, serial);
+
+        // Primary Account Number: length 22
+        char pan[22] = "6212260200166874038   ";
+        message = concat(message, pan);
+
+        // Process Code (length 6) 
+        // Local Transaction( length 4, format: MMDD)
+        message = concat(message, "5002301214");
+
+        // tradenum: length 6
+        int tradenum = 10000 + i ; 
+        char *trade = leftpadding(6, tradenum, '0');
+        message = concat(message, trade);        
+
+        // Transaction: length: 12, 
+        // Transmission Date and Time: length: 10, format: MMDDhhmmss 
+        // Expiration, length: 4, foramt: YYMM
+        // Settlement, length: 4. format: MMDD
+        message = concat(message, "000000000100");        // represent 1.00 local currency,
+        message = concat(message, "100312143622101003");  // Transmission Date and Time + Expiration + Settlement
+     
+        // trackingnum, length: 24
+        int tracknum = 30000 + i ;
+        char *track = leftpadding(24, tracknum, '0');
+        message = concat(message, track);      
+        
+        // Padding (24) + RF (8) 
+        message = concat(message, "     0                RF000001");      
+
+        // Date related
+        message = concat(message, ">A202209221849094451000000300000000444394782C0000       ");      
+
+        // Place Holder, length: 64
+        message = concat(message, "                                                                ");
+
+        // MAC(16) + Transaction Number(10) + Reversal Number(10)
+        message = concat(message, "eefbedec412e0000");
+        message = concat(message, "0000010003");
+        message = concat(message, "0000000105");
+
+        // FeeAmount (12) + Amount(16) + Debits Amount (16) + Reversal Amount(16)
+        message = concat(message, "000300000000");        // represent 3 m local currency,
+        message = concat(message, "0000000000001000");
+        message = concat(message, "0000000000002000");
+        message = concat(message, "0000000000003000");
+
+        // Padding(58)
+        message = concat(message, "                                                          ");
+
+        // Original Data Elements (42 = 4 +9 + 10 + 11 + 8)
+        message = concat(message, "041050000000210031214360000000094300000010"); 
+
+        // Padding (36) + Net Settlement Amount(17) + Settlement Institution Identification(11)
+        message = concat(message, "                                    ");
+        message = concat(message, "D0000000020000000");
+        message = concat(message, "82010121220");
+
+        // Padding 
+        message = concat(message, "                                                             0000000044439");     
+
+        // Account (15) + Birth (12)
+        message = concat(message, "478201151150206198903180013");        
+
+        // Padding (275)
+        message = concat(message, "                                                                                                    ");
+        message = concat(message, "                                                                                                    ");
+        message = concat(message, "                                                                                               ");
+
+        // Account Identification 1 (28) + Account Identiication 2 (48)
+        message = concat(message, "0000000000000000000000000001000000000000000000000000000000000000000000000000");
+
+        // Padding (104)
+        message = concat(message, "                                                                                                        ");
+        message = concat(message, "C000000000");
+        message = concat(message, "                                                                                                    ");
+        message = concat(message, "                                                                                                    ");
+        message = concat(message, "0000000000");
+        message = concat(message, "                                                                                                                        ");
+        message = concat(message, "                                                                                                                        ");
+        message = concat(message, "0000000");
+
+        // holder
+        //message = concat(message, "        "); 
+        printf("%s\n", message);
     }
 
 }
