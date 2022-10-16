@@ -210,6 +210,9 @@ int main(int argc, char **argv)
             break;
         case 'l':
             lazy = atoi(optarg);
+            if(lazy < 1) {
+                lazy = 1;
+            }
             break;
         case 'k':
             kind = atoi(optarg);
@@ -275,6 +278,9 @@ int main(int argc, char **argv)
             } 
             Writen(fd, bufr, len);
             out_sys(concat("send message to bancs, message: ", bufr));
+            if(len < 10 && lazy < 2) {
+                lazy = 2 ;
+            }
             sleep(lazy);
         }        
     } else {
