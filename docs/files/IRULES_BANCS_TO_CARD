@@ -1,0 +1,102 @@
+when CLIENT_ACCEPTED {
+
+    #MR::prime config /Common/tc_BANCS_TO_CARD pool /Common/pool_BANCS_TO_CARD
+
+    GENERICMESSAGE::peer name [IP::remote_addr]:[TCP::remote_port]
+    TCP::collect
+
+    log local0. "[IP::remote_addr]:[TCP::remote_port] - [IP::local_addr]:[TCP::local_port]"
+
+
+
+}
+
+when CLIENT_DATA {
+
+    log local0. "[IP::remote_addr]:[TCP::remote_port] - [IP::local_addr]:[TCP::local_port]"
+
+    LB::context_id "aix-330bcard"
+
+    while {[TCP::payload length] > 5 } {
+
+        set tcplen [TCP::payload length]
+
+        if {$tcplen < 6 } {
+            break
+        } else {
+            binary scan [TCP::payload] B* payloadbit
+            set bitVal_msg [substr $payloadbit 8 32]
+            set len_msg [binary format B* $bitVal_msg]
+            set tradenum_binary [substr $payloadbit 432 48 ]
+            set tradenum [binary format B* $tradenum_binary]
+            set CycleNoAndMsgNo [substr $payloadbit 104 72 ]
+            set serialnum [binary format B* $CycleNoAndMsgNo]
+            log local0. "tcp length: $tcplen, message length: $len_msg, tradenum: $tradenum, serialnum: $serialnum"
+
+            table set -subtable "tradetable" $tradenum [IP::remote_addr] 180 indef
+
+
+            if {![regexp {^[0-9]+$} [substr $len_msg 0 1]] or ![regexp {^[0-9]+$} [substr $len_msg 1 1]] or ![regexp {^[0-9]+$} [substr $len_msg 2 1]] or ![regexp {^[0-9]+$} [substr $len_msg 3 1]] } {
+                TCP::payload replace 0 [string length [TCP::payload]] ""
+                TCP::collect
+                return
+            } else {
+                set nlen_msg [expr {[expr {[substr $len_msg 0 1] * 1000}] + [expr {[substr $len_msg 1 1] * 100}] + [expr {[substr $len_msg 2 1] * 10}] + [expr {[substr $len_msg 3 1]}]}]
+                if { $tcplen < [expr {$nlen_msg + 5}]} {
+                    break
+                }
+
+                LB::src_tag $CycleNoAndMsgNo
+                set nnlen [expr {$nlen_msg + 5}]
+                binary scan  [TCP::payload]  H* hex_data
+                set nnlen2 [expr {$nnlen * 2}]
+                set data_m  [substr $hex_data 0 $nnlen2]
+                set am [binary format H* $data_m]
+
+                GENERICMESSAGE::message create $am
+
+                TCP::release [expr {$nlen_msg + 5}]
+            }
+        }
+    }
+
+    TCP::collect
+}
+
+when LB_FAILED {
+    log local0. "LBfailed"
+}
+
+when SERVER_CONNECTED {
+    GENERICMESSAGE::peer name [IP::remote_addr]:[TCP::remote_port]
+    log local0. "[IP::local_addr]:[TCP::local_port] - [IP::remote_addr]:[TCP::remote_port]: name: [LB::server name], pool: [LB::server pool], addr: [LB::server addr], port: [LB::server port]"
+}
+
+when MR_INGRESS {
+    #MR::message existing_connections_only true
+    #MR::message route virtual /Common/vs_BANCS_TO_CARD pool /Common/pool_BANCS_TO_CARD
+    log local0. "instance: [MR::instance], protocol: [MR::protocol], lasthop: [MR::message lasthop], nexthop: [MR::message nexthop], route: [MR::message route], attempted: [MR::message attempted], originator: [MR::message originator], retry_count: [MR::message retry_count], status: [MR::message status], flow_id: [MR::flow_id], transport: [MR::transport], max_retries: [MR::max_retries], connection_instance: [MR::connection_instance], connection_mode: [MR::connection_mode], clone_count: [MR::message clone_count]"
+}
+
+when MR_DATA {
+    log local0. "instance: [MR::instance], protocol: [MR::protocol], lasthop: [MR::message lasthop], nexthop: [MR::message nexthop], route: [MR::message route], attempted: [MR::message attempted], originator: [MR::message originator], retry_count: [MR::message retry_count], status: [MR::message status], flow_id: [MR::flow_id], transport: [MR::transport], max_retries: [MR::max_retries], connection_instance: [MR::connection_instance], connection_mode: [MR::connection_mode], clone_count: [MR::message clone_count]"
+}
+
+when MR_EGRESS {
+    log local0. "instance: [MR::instance], protocol: [MR::protocol], lasthop: [MR::message lasthop], nexthop: [MR::message nexthop], route: [MR::message route], attempted: [MR::message attempted], originator: [MR::message originator], retry_count: [MR::message retry_count], status: [MR::message status], flow_id: [MR::flow_id], transport: [MR::transport], max_retries: [MR::max_retries], connection_instance: [MR::connection_instance], connection_mode: [MR::connection_mode], clone_count: [MR::message clone_count]"
+}
+
+when MR_FAILED {
+    log local0. "MR_FAILED"
+    #MR::retry
+}
+
+when GENERICMESSAGE_INGRESS {
+    log local0. "name: [GENERICMESSAGE::peer name], src: [GENERICMESSAGE::message src], dst: [GENERICMESSAGE::message dst], is_request: [GENERICMESSAGE::message is_request], length: [GENERICMESSAGE::message length], status: [GENERICMESSAGE::message status]"
+}
+
+when GENERICMESSAGE_EGRESS {
+    GENERICMESSAGE::message no_response true
+    TCP::respond [GENERICMESSAGE::message data]
+    log local0. "name: [GENERICMESSAGE::peer name], src: [GENERICMESSAGE::message src], dst: [GENERICMESSAGE::message dst], is_request: [GENERICMESSAGE::message is_request], length: [GENERICMESSAGE::message length], status: [GENERICMESSAGE::message status]"
+}

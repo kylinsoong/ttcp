@@ -1,14 +1,27 @@
 = MRF Generic Message Routing Example 
 :toc: manual
 
-== BIG-IP Configuration Setting Up
+
+== Bi-Directional Persistence & Connection Auto-Initialization
+
+image:img/persistence-auto-initial.png[]
+
+There are 2 BANCS and 2 CARD, ESB to send message to `192.168.75.56:8805` and start the transaction:
+
+1. `192.168.75.56:8805` sent message to `192.168.75.31:8806`
+2. `192.168.75.31:8806` sent message to either `192.168.75.55:8806`, or `192.168.75.56:8806`(assume `192.168.75.55:8806` be selected)
+3. `192.168.75.55:8806` response message to `192.168.75.31:8805`
+4. `192.168.75.31:8805` response message to `192.168.75.56:8805` due to Bi-Directional Persistence
+
+=== BIG-IP Configuration Setting Up
 
 [source, bash]
 ----
+tmsh create ltm profile tcp tcp3000 idle-timeout 3000
 tmsh create ltm message-routing generic protocol protocol_BANCS_CARD { app-service none disable-parser yes }
 tmsh create ltm message-routing generic transport-config tc_BANCS_TO_CARD { profiles add { tcp3000  protocol_BANCS_CARD  } rules { IRULES_BANCS_TO_CARD } }
 tmsh create ltm message-routing generic transport-config tc_BANCS_FROM_CARD { profiles add { tcp3000  protocol_BANCS_CARD  } rules { IRULES_BANCS_FROM_CARD } }
-tmsh create ltm pool pool_BANCS_TO_CARD members add { 192.168.75.55:8806 } monitor tcp_half_open
+tmsh create ltm pool pool_BANCS_TO_CARD members add { 192.168.75.55:8806 192.168.75.56:8806} monitor tcp_half_open
 tmsh create ltm pool pool_BANCS_FROM_CARD members add { 192.168.75.55:8805 192.168.75.56:8805 } monitor tcp_half_open 
 tmsh create ltm message-routing generic peer peer_BANCS_TO_CARD { pool pool_BANCS_TO_CARD transport-config tc_BANCS_TO_CARD }
 tmsh create ltm message-routing generic peer peer_BANCS_FROM_CARD { pool pool_BANCS_FROM_CARD transport-config tc_BANCS_FROM_CARD auto-initialization enabled }
@@ -20,7 +33,10 @@ tmsh create ltm virtual vs_BANCS_TO_CARD { destination 192.168.75.31:8806 ip-pro
 tmsh create ltm virtual vs_BANCS_FROM_CARD { destination 192.168.75.31:8805 ip-protocol tcp pool pool_BANCS_FROM_CARD profiles add { protocol_BANCS_CARD router_BANCS_FROM_CARD tcp3000 } rules { IRULES_BANCS_FROM_CARD } source-address-translation { type automap } }
 ----
 
-== BIG-IP Configuration Clean Up
+* link:files/IRULES_BANCS_TO_CARD[IRULES_BANCS_TO_CARD]
+* link:files/IRULES_BANCS_FROM_CARD[IRULES_BANCS_FROM_CARD]
+
+=== BIG-IP Configuration Clean Up
 
 [source, bash]
 ----
@@ -37,247 +53,61 @@ tmsh delete ltm pool pool_BANCS_FROM_CARD
 tmsh delete ltm message-routing generic transport-config tc_BANCS_TO_CARD
 tmsh delete ltm message-routing generic transport-config tc_BANCS_FROM_CARD
 tmsh delete ltm message-routing generic protocol protocol_BANCS_CARD
+tmsh delete ltm profile tcp tcp3000
 ----
 
-== IRULE_TO
+=== TEST
 
-[source, text]
+[source, bash]
+.*1. Start BANCS*
 ----
-when CLIENT_ACCEPTED {
-
-    #MR::prime config /Common/tc_BANCS_TO_CARD pool /Common/pool_BANCS_TO_CARD 
-
-    GENERICMESSAGE::peer name [IP::remote_addr]:[TCP::remote_port]
-    TCP::collect
-    
-    log local0. "[IP::remote_addr]:[TCP::remote_port] - [IP::local_addr]:[TCP::local_port]"
-    
-    
-
-}
-
-when CLIENT_DATA {
-
-    log local0. "[IP::remote_addr]:[TCP::remote_port] - [IP::local_addr]:[TCP::local_port]"
-
-    LB::context_id "aix-330bcard"
-    
-    while {[TCP::payload length] > 5 } {
-    
-        set tcplen [TCP::payload length]
-        
-        if {$tcplen < 6 } {
-            break
-        } else {
-            binary scan [TCP::payload] B* payloadbit
-            set bitVal_msg [substr $payloadbit 8 32]
-            set len_msg [binary format B* $bitVal_msg]
-            set tradenum_binary [substr $payloadbit 432 48 ] 
-            set tradenum [binary format B* $tradenum_binary]
-            set CycleNoAndMsgNo [substr $payloadbit 104 72 ]
-            set serialnum [binary format B* $CycleNoAndMsgNo]
-            log local0. "tcp length: $tcplen, message length: $len_msg, tradenum: $tradenum, serialnum: $serialnum"
-            
-            table set -subtable "tradetable" $tradenum [IP::remote_addr] 180 indef
-            
-            
-            if {![regexp {^[0-9]+$} [substr $len_msg 0 1]] or ![regexp {^[0-9]+$} [substr $len_msg 1 1]] or ![regexp {^[0-9]+$} [substr $len_msg 2 1]] or ![regexp {^[0-9]+$} [substr $len_msg 3 1]] } {
-                TCP::payload replace 0 [string length [TCP::payload]] ""
-                TCP::collect
-                return
-            } else {
-                set nlen_msg [expr {[expr {[substr $len_msg 0 1] * 1000}] + [expr {[substr $len_msg 1 1] * 100}] + [expr {[substr $len_msg 2 1] * 10}] + [expr {[substr $len_msg 3 1]}]}]
-                if { $tcplen < [expr {$nlen_msg + 5}]} {
-                    break
-                }
-                
-                LB::src_tag $CycleNoAndMsgNo
-                set nnlen [expr {$nlen_msg + 5}]
-                binary scan  [TCP::payload]  H* hex_data
-                set nnlen2 [expr {$nnlen * 2}]
-                set data_m  [substr $hex_data 0 $nnlen2]
-                set am [binary format H* $data_m] 
-                
-                GENERICMESSAGE::message create $am
-                
-                TCP::release [expr {$nlen_msg + 5}]
-            }
-        } 
-    }
-    
-    TCP::collect
-}
-
-when LB_FAILED {
-    log local0. "LBfailed"
-}
-
-when SERVER_CONNECTED {
-    GENERICMESSAGE::peer name [IP::remote_addr]:[TCP::remote_port]
-    log local0. "[IP::local_addr]:[TCP::local_port] - [IP::remote_addr]:[TCP::remote_port]: name: [LB::server name], pool: [LB::server pool], addr: [LB::server addr], port: [LB::server port]"
-}
-
-when MR_INGRESS {
-    #MR::message existing_connections_only true
-    #MR::message route virtual /Common/vs_BANCS_TO_CARD pool /Common/pool_BANCS_TO_CARD
-    log local0. "instance: [MR::instance], protocol: [MR::protocol], lasthop: [MR::message lasthop], nexthop: [MR::message nexthop], route: [MR::message route], attempted: [MR::message attempted], originator: [MR::message originator], retry_count: [MR::message retry_count], status: [MR::message status], flow_id: [MR::flow_id], transport: [MR::transport], max_retries: [MR::max_retries], connection_instance: [MR::connection_instance], connection_mode: [MR::connection_mode], clone_count: [MR::message clone_count]"
-}
-
-when MR_DATA {
-    log local0. "instance: [MR::instance], protocol: [MR::protocol], lasthop: [MR::message lasthop], nexthop: [MR::message nexthop], route: [MR::message route], attempted: [MR::message attempted], originator: [MR::message originator], retry_count: [MR::message retry_count], status: [MR::message status], flow_id: [MR::flow_id], transport: [MR::transport], max_retries: [MR::max_retries], connection_instance: [MR::connection_instance], connection_mode: [MR::connection_mode], clone_count: [MR::message clone_count]"
-}
-
-when MR_EGRESS {
-    log local0. "instance: [MR::instance], protocol: [MR::protocol], lasthop: [MR::message lasthop], nexthop: [MR::message nexthop], route: [MR::message route], attempted: [MR::message attempted], originator: [MR::message originator], retry_count: [MR::message retry_count], status: [MR::message status], flow_id: [MR::flow_id], transport: [MR::transport], max_retries: [MR::max_retries], connection_instance: [MR::connection_instance], connection_mode: [MR::connection_mode], clone_count: [MR::message clone_count]"
-}
-
-when MR_FAILED {
-    log local0. "MR_FAILED"
-    #MR::retry
-}
-
-when GENERICMESSAGE_INGRESS {
-    log local0. "name: [GENERICMESSAGE::peer name], src: [GENERICMESSAGE::message src], dst: [GENERICMESSAGE::message dst], is_request: [GENERICMESSAGE::message is_request], length: [GENERICMESSAGE::message length], status: [GENERICMESSAGE::message status]"
-}
-
-when GENERICMESSAGE_EGRESS {
-    GENERICMESSAGE::message no_response true
-    TCP::respond [GENERICMESSAGE::message data]
-    log local0. "name: [GENERICMESSAGE::peer name], src: [GENERICMESSAGE::message src], dst: [GENERICMESSAGE::message dst], is_request: [GENERICMESSAGE::message is_request], length: [GENERICMESSAGE::message length], status: [GENERICMESSAGE::message status]"
-}
+bancs -b 192.168.75.31
+bancs -b 192.168.75.31
 ----
 
-== IRULE FROM
-
-[source, text]
+[source, bash]
+.*2. START CARD*
 ----
-when CLIENT_ACCEPTED {
-
-    #MR::prime config /Common/tc_BANCS_FROM_CARD pool /Common/pool_BANCS_FROM_CARD 
-
-    TCP::collect
-    
-    log local0. "[IP::remote_addr]:[TCP::remote_port] - [IP::local_addr]:[TCP::local_port]"
-    
-    GENERICMESSAGE::peer name [IP::remote_addr]:[TCP::remote_port]
-    
-}
-
-when CLIENT_DATA {
-
-    log local0. "[IP::remote_addr]:[TCP::remote_port] - [IP::local_addr]:[TCP::local_port]"
-
-    LB::context_id "aix-330bcard"
-    
-    while {[TCP::payload length] > 5 } {
-    
-        set tcplen [TCP::payload length]
-        
-        if {$tcplen < 6 } {
-            break
-        } else {
-            binary scan [TCP::payload] B* payloadbit
-            set bitVal_msg [substr $payloadbit 8 32]
-            set len_msg [binary format B* $bitVal_msg]
-            set tradenum_binary [substr $payloadbit 432 48 ] 
-            set tradenum [binary format B* $tradenum_binary]
-            set CycleNoAndMsgNo [substr $payloadbit 104 72 ]
-            set serialnum [binary format B* $CycleNoAndMsgNo]
-            log local0. "tcp length: $tcplen, message length: $len_msg, tradenum: $tradenum, serialnum: $serialnum"
-            
-            if {![regexp {^[0-9]+$} [substr $len_msg 0 1]] or ![regexp {^[0-9]+$} [substr $len_msg 1 1]] or ![regexp {^[0-9]+$} [substr $len_msg 2 1]] or ![regexp {^[0-9]+$} [substr $len_msg 3 1]] } {
-                TCP::payload replace 0 [string length [TCP::payload]] ""
-                TCP::collect
-                return
-            } else {
-                set nlen_msg [expr {[expr {[substr $len_msg 0 1] * 1000}] + [expr {[substr $len_msg 1 1] * 100}] + [expr {[substr $len_msg 2 1] * 10}] + [expr {[substr $len_msg 3 1]}]}]
-                if { $tcplen < [expr {$nlen_msg + 5}]} {
-                    break
-                }
-                
-                LB::src_tag $CycleNoAndMsgNo
-                set nnlen [expr {$nlen_msg + 5}]
-                binary scan  [TCP::payload]  H* hex_data
-                set nnlen2 [expr {$nnlen * 2}]
-                set data_m  [substr $hex_data 0 $nnlen2]
-                set am [binary format H* $data_m] 
-                
-                GENERICMESSAGE::message create $am
-                
-                TCP::release [expr {$nlen_msg + 5}]
-            }
-        } 
-    }
-    
-    TCP::collect
-}
-
-when LB_SELECTED {
-    log local0. "name: [LB::server name], pool: [LB::server pool], addr: [LB::server addr], port: [LB::server port]"
-}
-
-when LB_FAILED {
-    log local0. "LBfailed"
-}
-
-when SERVER_CONNECTED {
-    set selectedhost [LB::server addr]
-    GENERICMESSAGE::peer name [IP::remote_addr]:[TCP::remote_port]
-    log local0. "[IP::local_addr]:[TCP::local_port] - [IP::remote_addr]:[TCP::remote_port]: name: [LB::server name], pool: [LB::server pool], addr: [LB::server addr], port: [LB::server port]"
-}
-
-when MR_INGRESS {
-    log local0. "instance: [MR::instance], protocol: [MR::protocol], lasthop: [MR::message lasthop], nexthop: [MR::message nexthop], route: [MR::message route], attempted: [MR::message attempted], originator: [MR::message originator], retry_count: [MR::message retry_count], status: [MR::message status], flow_id: [MR::flow_id], transport: [MR::transport], max_retries: [MR::max_retries], connection_instance: [MR::connection_instance], connection_mode: [MR::connection_mode], clone_count: [MR::message clone_count]"
-    
-    # look the request host ip from table
-    set requestip [ table lookup -subtable "tradetable" -notouch $tradenum ]
-    log local0. "lookup the table, original host ip: $requestip"
-
-    # find the request host port via the first member's port
-    # Assume all members has same port
-    # If one host has multiple port, then the logic below will has risk
-    set member [lindex [active_members -list [LB::server pool]] 0]
-    set requestport [lindex $member 1]
-    log local0. "invetigate the active pool member, original host port: $requestport"
-
-    if {$requestip ne "" } {
-        if { [LB::status pool [LB::server pool] member $requestip $requestport ] eq "down"} {
-            log local0. "servics on request host is down"
-        } else {
-            log local0. "set message destination to original request host $requestip:$requestport"
-            
-            # Option 2
-            GENERICMESSAGE::message dst $requestip:$requestport
-        }
-    }
-    
-    MR::store requestip 
-}
-
-when MR_EGRESS {
-
-    MR::restore requestip
-
-    log local0. "instance: [MR::instance], protocol: [MR::protocol], lasthop: [MR::message lasthop], nexthop: [MR::message nexthop], route: [MR::message route], attempted: [MR::message attempted], originator: [MR::message originator], retry_count: [MR::message retry_count], status: [MR::message status], flow_id: [MR::flow_id], transport: [MR::transport], max_retries: [MR::max_retries], connection_instance: [MR::connection_instance], connection_mode: [MR::connection_mode], clone_count: [MR::message clone_count]"
-
-    log local0. "requestip: $requestip, selectedhost: $selectedhost"
-    
-    # Option 1
-    #pool [LB::server pool] member $requestip $requestport 
-}
-
-when MR_FAILED {
-    log local0. "MR_FAILED"
-}
-
-when GENERICMESSAGE_INGRESS {
-    log local0. "name: [GENERICMESSAGE::peer name], src: [GENERICMESSAGE::message src], dst: [GENERICMESSAGE::message dst], is_request: [GENERICMESSAGE::message is_request], length: [GENERICMESSAGE::message length], status: [GENERICMESSAGE::message status]"
-}
-
-when GENERICMESSAGE_EGRESS {
-
-    GENERICMESSAGE::message no_response true
-    TCP::respond [GENERICMESSAGE::message data]
-    log local0. "name: [GENERICMESSAGE::peer name], src: [GENERICMESSAGE::message src], dst: [GENERICMESSAGE::message dst], is_request: [GENERICMESSAGE::message is_request], length: [GENERICMESSAGE::message length], status: [GENERICMESSAGE::message status]"
-}
+bancs -c 192.168.75.31
+bancs -c 192.168.75.31
 ----
+
+[source, bash]
+.*3. Generate test message*
+----
+bancs -t -n 3 > /etc/bancs.data
+----
+
+[source, bash]
+.*4. Send test message*
+----
+bancs -e 192.168.75.56
+----
+
+
+=== TEST
+
+[source, bash]
+.*1. Start BANCS*
+----
+
+----
+
+[source, bash]
+.*2. START CARD*
+----
+
+----
+
+[source, bash]
+.*3. Generate test message*
+----
+
+----
+
+[source, bash]
+.*4. Send test message*
+----
+
+----
+
