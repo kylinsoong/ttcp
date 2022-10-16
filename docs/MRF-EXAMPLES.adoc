@@ -159,8 +159,7 @@ when CLIENT_ACCEPTED {
 }
 ----
 
-
-==== BIG-IP Configuration Clean Up
+=== BIG-IP Configuration Clean Up
 
 The scripts same as above *Minimum Generic Message Routing*.
 
