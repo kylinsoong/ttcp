@@ -1,0 +1,19 @@
+when CLIENT_ACCEPTED {
+    GENERICMESSAGE::peer name [IP::remote_addr]:[TCP::remote_port]
+    TCP::collect
+}
+
+when CLIENT_DATA {
+    GENERICMESSAGE::message create [TCP::payload]
+    TCP::release
+    TCP::collect
+}
+
+when SERVER_CONNECTED {
+    GENERICMESSAGE::peer name [IP::remote_addr]:[TCP::remote_port]
+}
+
+when GENERICMESSAGE_EGRESS {
+    GENERICMESSAGE::message no_response true
+    TCP::respond [GENERICMESSAGE::message data]
+}

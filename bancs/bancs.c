@@ -60,7 +60,7 @@
  *   Start Tools
  *   ./a.out -t -n 10 > /etc/bancs.data 
  *    
- *   To yse Tools to generate a test message, set the kind to 9
+ *   To use Tools to generate a test message, set the kind to 9
  *   ./a.out -t -k 9 -n 100 > /etc/bancs.data
  *
  *
