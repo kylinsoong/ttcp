@@ -30,6 +30,8 @@ tmsh create ltm virtual vs_BANCS_FROM_CARD { destination 192.168.75.31:8805 ip-p
 * link:files/min/IRULES_BANCS_TO_CARD[IRULES_BANCS_TO_CARD]
 * link:files/min/IRULES_BANCS_FROM_CARD[IRULES_BANCS_FROM_CARD]
 
+=== BIG-IP Configuration Clean Up
+
 [source, bash]
 ----
 tmsh delete ltm virtual vs_BANCS_TO_CARD
