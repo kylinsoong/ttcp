@@ -176,6 +176,8 @@ char     *leftpadding(int, int, char);
  * */
 int hint = 0 ;
 
+int is_bancs_from_esb = 0, is_bancs_from_card = 0;
+
 
 /*
 void     Str_puts(int);
@@ -388,12 +390,11 @@ void InboundHandler() {
   sprintf(str, "inbound handler listen on 0.0.0.0:%d", inport);
   out_sys(str);
 
+  is_bancs_from_esb = 1;
+
   for(;;) {
-
     connfd = Accept(fd, (struct sockaddr *)&bancs_from_esb, &bancs_from_esb_len);
-
     ReadFromSock(connfd);
-
     Close(connfd);
   }
 
@@ -428,31 +429,12 @@ void BancsFromCardHandler() {
     sprintf(str, "card handler listen on 0.0.0.0:%d", port);
     out_sys(str);
 
+    is_bancs_from_card = 1 ;
+
     for(;;) {
-
         connfd_bancs = Accept(fd_bancs, (struct sockaddr *)&bancs_from_card, &bancs_from_card_len);
-        char *peer = Getpeername(connfd_bancs);
-        out_sys(concat("connection from card: ", peer));
-
-        for(;;) {
-            char header[5];
-            Readn(connfd_bancs, header, 5);
-            header[5] = '\0';
-            int datalen = extlength(header);
-
-            if(datalen <= 0) {
-                char str[80];
-                sprintf(str, "CARD %s response illegal message, header: %s, header length: %d, data length: %d", peer, header, strlen(header), datalen);
-                out_sys(str);
-                break;
-            }
-
-            char message[datalen];
-            Readn(connfd_bancs, message, datalen);
-            message[datalen] = '\0';
-            char *total = concat(header, message);
-            out_sys(concat("response message from card, message: ", total)); // TODO- add to parse ISO8583 to extract specific bit position.  
-        }
+        ReadFromSock(connfd_bancs);
+        Close(connfd_bancs);
     }
 
 }
@@ -502,11 +484,8 @@ void CardFromBancsHandler() {
     out_sys(str);
 
     for(;;) {
-
         connfd = Accept(fd, (struct sockaddr *)&card_from_bancs, &card_from_bancs_len);
-
         ReadFromSock(connfd);
-
         Close(connfd);
     }
     
@@ -614,8 +593,21 @@ void ReadFromSock(int connfd) {
         Readn(connfd, message, datalen);
         message[datalen] = '\0';
 
+        if(strcmp(message, "0000") == 0  && datalen == 4 && !is_bancs_from_esb) {
+            out_sys("heartbeat received");
+            memset(header, 0, 5);
+            memset(message, 0, datalen); 
+            continue;
+        }
+
         char *total = concat(header, message);
         total[datalen + 5] = '\0';
+
+        if(server == 1 && is_bancs_from_card ) {
+            out_sys(concat("response message from card, message: ", total)); 
+            continue;
+            // TODO- add to parse ISO8583 to extract specific bit position.  
+        }
 
         char str[80];
         sprintf(str, "receive message from %s, message length: %d, total length: %d", peer, datalen, strlen(total));
@@ -627,7 +619,7 @@ void ReadFromSock(int connfd) {
         }
 
         memset(header, 0, 5);
-        memset(message, 0, datalen); write(p[1], total, datalen + 5);
+        memset(message, 0, datalen); 
     }
 
 }
@@ -927,7 +919,7 @@ void generate(int num, int kind) {
         for(i = 0 ; i < num ; i ++) {
             char trim[20];
             sprintf(trim, "%d", i);            
-            char *message = "test message";
+            char *message = "  test message";
             message = concat(message, " ");
             message = concat(message, trim);
             char *header = leftpadding(5, strlen(message), '0');
