@@ -30,6 +30,30 @@ tmsh create ltm virtual vs_BANCS_FROM_CARD { destination 192.168.75.31:8805 ip-p
 * link:files/min/IRULES_BANCS_TO_CARD[IRULES_BANCS_TO_CARD]
 * link:files/min/IRULES_BANCS_FROM_CARD[IRULES_BANCS_FROM_CARD]
 
+[source, bash]
+.*Minimum Generic Message Routing iRules*
+----
+when CLIENT_ACCEPTED {
+    GENERICMESSAGE::peer name [IP::remote_addr]:[TCP::remote_port]
+    TCP::collect
+}
+
+when CLIENT_DATA {
+    GENERICMESSAGE::message create [TCP::payload]
+    TCP::release
+    TCP::collect
+}
+
+when SERVER_CONNECTED {
+    GENERICMESSAGE::peer name [IP::remote_addr]:[TCP::remote_port]
+}
+
+when GENERICMESSAGE_EGRESS {
+    GENERICMESSAGE::message no_response true
+    TCP::respond [GENERICMESSAGE::message data]
+}
+----
+
 === BIG-IP Configuration Clean Up
 
 [source, bash]
@@ -74,43 +98,112 @@ bancs -t -k 9 -n 10 > /etc/bancs.data
 [source, bash]
 .*4. Send test message*
 ----
-bancs -e -l 1 192.168.75.55
+bancs -e -l 5 192.168.75.55
 ----
 
 [source, bash]
 .*5. Check CARD log(message be distributed to 2 host)*
 ----
 @1 ~]# bancs -c -l 1 192.168.75.31
-16-Oct-2022 20:09:18 (1883) CARD: start
-16-Oct-2022 20:09:18 (1884) CARD: bancs handler listen on 0.0.0.0:8806
-16-Oct-2022 20:09:28 (1883) CARD: connect to bancs 192.168.75.31
-16-Oct-2022 20:10:32 (1884) CARD: connection from 192.168.75.50:54248
-16-Oct-2022 20:10:32 (1884) CARD: receive message from 192.168.75.50:54248, message length: 14, total length: 19
-16-Oct-2022 20:10:32 (1883) CARD: response message to bancs, message: 00014test message 1
-16-Oct-2022 20:10:34 (1884) CARD: receive message from 192.168.75.50:54248, message length: 14, total length: 19
-16-Oct-2022 20:10:34 (1883) CARD: response message to bancs, message: 00014test message 3
-16-Oct-2022 20:10:36 (1884) CARD: receive message from 192.168.75.50:54248, message length: 14, total length: 19
-16-Oct-2022 20:10:36 (1883) CARD: response message to bancs, message: 00014test message 5
-16-Oct-2022 20:10:38 (1884) CARD: receive message from 192.168.75.50:54248, message length: 14, total length: 19
-16-Oct-2022 20:10:38 (1883) CARD: response message to bancs, message: 00014test message 7
-16-Oct-2022 20:10:40 (1884) CARD: receive message from 192.168.75.50:54248, message length: 14, total length: 19
-16-Oct-2022 20:10:40 (1883) CARD: response message to bancs, message: 00014test message 9
+16-Oct-2022 22:25:52 (1979) CARD: start
+16-Oct-2022 22:25:52 (1980) CARD: bancs handler listen on 0.0.0.0:8806
+16-Oct-2022 22:26:02 (1979) CARD: connect to bancs 192.168.75.31
+16-Oct-2022 22:27:58 (1980) CARD: connection from 192.168.75.50:53830
+16-Oct-2022 22:27:58 (1980) CARD: received message from bancs, message: 00016  test message 1
+16-Oct-2022 22:27:58 (1979) CARD: response message to bancs, message: 00016  test message 1
+16-Oct-2022 22:28:08 (1980) CARD: received message from bancs, message: 00016  test message 3
+16-Oct-2022 22:28:08 (1979) CARD: response message to bancs, message: 00016  test message 3
+16-Oct-2022 22:28:18 (1980) CARD: received message from bancs, message: 00016  test message 5
+16-Oct-2022 22:28:18 (1979) CARD: response message to bancs, message: 00016  test message 5
+16-Oct-2022 22:28:28 (1980) CARD: received message from bancs, message: 00016  test message 7
+16-Oct-2022 22:28:28 (1979) CARD: response message to bancs, message: 00016  test message 7
+16-Oct-2022 22:28:38 (1980) CARD: received message from bancs, message: 00016  test message 9
+16-Oct-2022 22:28:38 (1979) CARD: response message to bancs, message: 00016  test message 9
 
 @2 ~]# bancs -c -l 1 192.168.75.31
-16-Oct-2022 20:09:11 (1661) CARD: start
-16-Oct-2022 20:09:11 (1662) CARD: bancs handler listen on 0.0.0.0:8806
-16-Oct-2022 20:09:21 (1661) CARD: connect to bancs 192.168.75.31
-16-Oct-2022 20:10:31 (1662) CARD: connection from 192.168.75.50:54247
-16-Oct-2022 20:10:31 (1662) CARD: receive message from 192.168.75.50:54247, message length: 14, total length: 19
-16-Oct-2022 20:10:31 (1661) CARD: response message to bancs, message: 00014test message 0
-16-Oct-2022 20:10:33 (1662) CARD: receive message from 192.168.75.50:54247, message length: 14, total length: 19
-16-Oct-2022 20:10:33 (1661) CARD: response message to bancs, message: 00014test message 2
-16-Oct-2022 20:10:35 (1662) CARD: receive message from 192.168.75.50:54247, message length: 14, total length: 19
-16-Oct-2022 20:10:35 (1661) CARD: response message to bancs, message: 00014test message 4
-16-Oct-2022 20:10:37 (1662) CARD: receive message from 192.168.75.50:54247, message length: 14, total length: 19
-16-Oct-2022 20:10:37 (1661) CARD: response message to bancs, message: 00014test message 6
-16-Oct-2022 20:10:39 (1662) CARD: receive message from 192.168.75.50:54247, message length: 14, total length: 19
-16-Oct-2022 20:10:39 (1661) CARD: response message to bancs, message: 00014test message 8
+16-Oct-2022 22:25:49 (1749) CARD: start
+16-Oct-2022 22:25:49 (1750) CARD: bancs handler listen on 0.0.0.0:8806
+16-Oct-2022 22:25:59 (1749) CARD: connect to bancs 192.168.75.31
+16-Oct-2022 22:27:54 (1750) CARD: connection from 192.168.75.50:53823
+16-Oct-2022 22:27:54 (1750) CARD: received message from bancs, message: 00016  test message 0
+16-Oct-2022 22:27:54 (1749) CARD: response message to bancs, message: 00016  test message 0
+16-Oct-2022 22:28:04 (1750) CARD: received message from bancs, message: 00016  test message 2
+16-Oct-2022 22:28:04 (1749) CARD: response message to bancs, message: 00016  test message 2
+16-Oct-2022 22:28:14 (1750) CARD: received message from bancs, message: 00016  test message 4
+16-Oct-2022 22:28:14 (1749) CARD: response message to bancs, message: 00016  test message 4
+16-Oct-2022 22:28:24 (1750) CARD: received message from bancs, message: 00016  test message 6
+16-Oct-2022 22:28:24 (1749) CARD: response message to bancs, message: 00016  test message 6
+16-Oct-2022 22:28:34 (1750) CARD: received message from bancs, message: 00016  test message 8
+16-Oct-2022 22:28:34 (1749) CARD: response message to bancs, message: 00016  test message 8
+----
+
+== Heartbeat Message
+
+=== BIG-IP Configuration Setting Up
+
+The pool, vs, and genearic message objects are same as above *Minimum Generic Message Routing*.
+
+The difference is the folloing are added in iRUle
+
+[source, bash]
+----
+when CLIENT_ACCEPTED {
+    
+    foreach am [active_members -list [LB::server pool]] {
+        TCP::payload replace 0 0 "000040000"
+        pool [LB::server pool] member [lindex $am 0] [lindex $am 1]
+        GENERICMESSAGE::message create [TCP::payload]
+        TCP::release 6
+        log local0. "create 0000 message [lindex $am 0] [lindex $am 1]"
+    }
+}
+----
+
+
+==== BIG-IP Configuration Clean Up
+
+The scripts same as above *Minimum Generic Message Routing*.
+
+=== TEST
+
+[source, bash]
+.*1. Start BANCS*
+----
+bancs -b -l 1 192.168.75.31
+----
+
+[source, bash]
+.*2. Start CARD*
+----
+bancs -c -l 1 192.168.75.31
+bancs -c -l 1 192.168.75.31
+----
+
+[source, bash]
+.*3. Check both CARD and BANCS log*
+----
+@1 ~]# bancs -b 192.168.75.31
+16-Oct-2022 22:38:22 (1984) BANCS: start
+16-Oct-2022 22:38:22 (1985) BANCS: inbound handler start
+16-Oct-2022 22:38:22 (1985) BANCS: inbound handler listen on 0.0.0.0:9805
+16-Oct-2022 22:38:22 (1986) BANCS: card handler start
+16-Oct-2022 22:38:22 (1986) BANCS: card handler listen on 0.0.0.0:8805
+16-Oct-2022 22:39:42 (1984) BANCS: connect to card 192.168.75.31
+16-Oct-2022 22:39:49 (1986) BANCS: connection from 192.168.75.50:57078
+16-Oct-2022 22:39:49 (1986) BANCS: heartbeat receive
+16-Oct-2022 22:39:55 (1986) BANCS: heartbeat receive
+
+@1 ~]# bancs -c  192.168.75.31
+16-Oct-2022 22:38:35 (1987) CARD: start
+16-Oct-2022 22:38:35 (1988) CARD: bancs handler listen on 0.0.0.0:8806
+16-Oct-2022 22:39:42 (1988) CARD: connection from 192.168.75.50:40227
+16-Oct-2022 22:39:42 (1988) CARD: heartbeat receive
+
+@2 ~]# bancs -c  192.168.75.31
+16-Oct-2022 22:38:30 (1753) CARD: start
+16-Oct-2022 22:38:30 (1754) CARD: bancs handler listen on 0.0.0.0:8806
+16-Oct-2022 22:39:42 (1754) CARD: connection from 192.168.75.50:40229
+16-Oct-2022 22:39:42 (1754) CARD: heartbeat receive
 ----
 
 == Bi-Directional Persistence & Connection Auto-Initialization
@@ -193,32 +286,5 @@ bancs -t -n 3 > /etc/bancs.data
 .*4. Send test message*
 ----
 bancs -e 192.168.75.56
-----
-
-
-=== TEST
-
-[source, bash]
-.*1. Start BANCS*
-----
-
-----
-
-[source, bash]
-.*2. START CARD*
-----
-
-----
-
-[source, bash]
-.*3. Generate test message*
-----
-
-----
-
-[source, bash]
-.*4. Send test message*
-----
-
 ----
 

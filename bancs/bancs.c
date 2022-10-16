@@ -111,7 +111,7 @@ extern int optind;
 extern char *optarg;
 
 int num = 3;      /* how many messages to generate */
-int kind = 1;  /* how long a message should be, currently support 1562 */
+int kind = 1562;  /* how long a message should be, currently support 1562 */
 int m = 6;        /* 0 - 0100, 1 - 0110, 2 - 0200, 3 - 0210, 4 - 0240, 5 - 0250, 6 - 0400, 7 - 0410, 8 - 0800, 9 - 0810 */
 
 
@@ -169,14 +169,8 @@ void     ReadFromSock(int);
 void     generate(int, int);
 char     *leftpadding(int, int, char);
 
-/* 1 - bancs to card 
- * 2 - card to bancs
- * 3 - bancs from card
- * 4 - card from bancs
- * */
-int hint = 0 ;
-
-int is_bancs_from_esb = 0, is_bancs_from_card = 0;
+int is_bancs_from_esb  = 0 ;
+int is_bancs_from_card = 0;
 
 
 /*
@@ -317,8 +311,6 @@ int main(int argc, char **argv)
             BancsFromCardHandler();
         } else {
 
-            hint = 1;
-
             sleep(lazy * 10);
 
             BancsToCardInit();
@@ -338,8 +330,6 @@ int main(int argc, char **argv)
     } else if (rc == 0) {
         CardFromBancsHandler();
     } else {
-
-        hint = 2;
 
         sleep(lazy * 10); 
 
@@ -543,9 +533,9 @@ void  WriteToSock(int fd) {
 
         Writen(fd, inbuf, strlen(inbuf));
 
-        if(hint == 1) {
+        if(server == 1) {
             out_sys(concat("request message to card, message: ", inbuf));
-        } else if (hint == 2) {
+        } else if (server == 2) {
             out_sys(concat("response message to bancs, message: ", inbuf));
         }
 
@@ -594,7 +584,7 @@ void ReadFromSock(int connfd) {
         message[datalen] = '\0';
 
         if(strcmp(message, "0000") == 0  && datalen == 4 && !is_bancs_from_esb) {
-            out_sys("heartbeat received");
+            out_sys("heartbeat receive");
             memset(header, 0, 5);
             memset(message, 0, datalen); 
             continue;
@@ -603,17 +593,24 @@ void ReadFromSock(int connfd) {
         char *total = concat(header, message);
         total[datalen + 5] = '\0';
 
-        if(server == 1 && is_bancs_from_card ) {
-            out_sys(concat("response message from card, message: ", total)); 
-            continue;
-            // TODO- add to parse ISO8583 to extract specific bit position.  
+        if(debug) {
+            char str[80];
+            sprintf(str, "receive message from %s, message length: %d, total length: %d", peer, datalen, strlen(total));
+            out_sys(str);
         }
 
-        char str[80];
-        sprintf(str, "receive message from %s, message length: %d, total length: %d", peer, datalen, strlen(total));
-        out_sys(str);
+        if(server == 1 && is_bancs_from_card ) {
+            out_sys(concat("response message from card, message: ", total));
+            continue;
+            // TODO- add to parse ISO8583 to extract specific bit position.  
+        } else if(server == 1 && is_bancs_from_esb) {
+            out_sys(concat("receive message from client, message: ", total));
+        } else if(server == 2)  {
+            out_sys(concat("received message from bancs, message: ", total));
+        }
 
         write(p[1], total, datalen + 5);
+
         if(debug) {
             out_sys(concat("add message to pipe, message: ", total));
         }
