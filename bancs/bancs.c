@@ -59,6 +59,10 @@
  *
  *   Start Tools
  *   ./a.out -t -n 10 > /etc/bancs.data 
+ *    
+ *   To yse Tools to generate a test message, set the kind to 9
+ *   ./a.out -t -k 9 -n 100 > /etc/bancs.data
+ *
  *
  */
 
@@ -107,7 +111,7 @@ extern int optind;
 extern char *optarg;
 
 int num = 3;      /* how many messages to generate */
-int kind = 1562;  /* how long a message should be, currently support 1562 */
+int kind = 1;  /* how long a message should be, currently support 1562 */
 int m = 6;        /* 0 - 0100, 1 - 0110, 2 - 0200, 3 - 0210, 4 - 0240, 5 - 0250, 6 - 0400, 7 - 0410, 8 - 0800, 9 - 0810 */
 
 
@@ -123,7 +127,7 @@ Common options:\n\
 Common options for -t:\n\
         -m ##   specify the version of the ISO8583 standard, allowed value are 0-9\n\
         -n ##   total number of message to generated\n\
-        -k ##   specify message kinds, different kinds means different length, 1 - 1562\n\
+        -k ##   specify message kinds, different kinds means different length, 1 - 1562, 9 - 0(test)\n\
 ";
 
 /* Socket */
@@ -218,8 +222,10 @@ int main(int argc, char **argv)
             kind = atoi(optarg);
             if(kind == 1) {
                 kind = 1562;
-            } else if (kind = 2) {
-                kind = 864;
+            } else if (kind == 9) {
+                kind = 0;
+            } else {
+                kind = 1562;
             }
             break;
         case 'm':
@@ -915,6 +921,21 @@ int extlength(void *vptr)
 }
 
 void generate(int num, int kind) {
+
+    if(kind == 0) {
+        int i;
+        for(i = 0 ; i < num ; i ++) {
+            char trim[20];
+            sprintf(trim, "%d", i);            
+            char *message = "test message";
+            message = concat(message, " ");
+            message = concat(message, trim);
+            char *header = leftpadding(5, strlen(message), '0');
+            message = concat(header, message);
+            printf("%s\n", message);
+        }
+        return ;
+    }
 
     int i, j;
     for(i = 0 ; i < num ; i ++) {
