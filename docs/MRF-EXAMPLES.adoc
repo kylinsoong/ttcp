@@ -1,5 +1,11 @@
-= MRF Generic Message Routing Example 
+= Generic Message Routing Example 
 :toc: manual
+
+== Chat
+
+This section provides an example of using Generic Message to implement a simple chat client, which the detailed information refer to 
+
+https://techdocs.f5.com/en-us/bigip-15-1-0/big-ip-service-provider-generic-message-administration/generic-message-example.html
 
 == Minimum Generic Message Routing
 
@@ -7,7 +13,7 @@ image:img/minum-generic-message.png[]
 
 One BANCS and two CARD, the `test message` be transit via Bi-Directional connection, the iRules are as simple as possible.
 
-=== BIG-IP Configuration Setting Up
+=== BIG-IP Configuration
 
 [source, bash]
 ----
@@ -54,27 +60,7 @@ when GENERICMESSAGE_EGRESS {
 }
 ----
 
-=== BIG-IP Configuration Clean Up
-
-[source, bash]
-----
-tmsh delete ltm virtual vs_BANCS_TO_CARD
-tmsh delete ltm virtual vs_BANCS_FROM_CARD
-tmsh delete ltm message-routing generic router router_BANCS_TO_CARD
-tmsh delete ltm message-routing generic router router_BANCS_FROM_CARD
-tmsh delete ltm message-routing generic route route_BANCS_TO_CARD
-tmsh delete ltm message-routing generic route route_BANCS_FROM_CARD
-tmsh delete ltm message-routing generic peer peer_BANCS_TO_CARD
-tmsh delete ltm message-routing generic peer peer_BANCS_FROM_CARD
-tmsh delete ltm pool pool_BANCS_TO_CARD
-tmsh delete ltm pool pool_BANCS_FROM_CARD
-tmsh delete ltm message-routing generic transport-config tc_BANCS_TO_CARD
-tmsh delete ltm message-routing generic transport-config tc_BANCS_FROM_CARD
-tmsh delete ltm message-routing generic protocol protocol_BANCS_CARD
-tmsh delete ltm profile tcp tcp3000
-----
-
-=== TEST
+=== How to run
 
 [source, bash]
 .*1. Start BANCS*
@@ -137,9 +123,29 @@ bancs -e -l 5 192.168.75.55
 16-Oct-2022 22:28:34 (1749) CARD: response message to bancs, message: 00016  test message 8
 ----
 
+=== Clean Up
+
+[source, bash]
+----
+tmsh delete ltm virtual vs_BANCS_TO_CARD
+tmsh delete ltm virtual vs_BANCS_FROM_CARD
+tmsh delete ltm message-routing generic router router_BANCS_TO_CARD
+tmsh delete ltm message-routing generic router router_BANCS_FROM_CARD
+tmsh delete ltm message-routing generic route route_BANCS_TO_CARD
+tmsh delete ltm message-routing generic route route_BANCS_FROM_CARD
+tmsh delete ltm message-routing generic peer peer_BANCS_TO_CARD
+tmsh delete ltm message-routing generic peer peer_BANCS_FROM_CARD
+tmsh delete ltm pool pool_BANCS_TO_CARD
+tmsh delete ltm pool pool_BANCS_FROM_CARD
+tmsh delete ltm message-routing generic transport-config tc_BANCS_TO_CARD
+tmsh delete ltm message-routing generic transport-config tc_BANCS_FROM_CARD
+tmsh delete ltm message-routing generic protocol protocol_BANCS_CARD
+tmsh delete ltm profile tcp tcp3000
+----
+
 == Heartbeat Message
 
-=== BIG-IP Configuration Setting Up
+=== BIG-IP Configuration
 
 The pool, vs, and genearic message objects are same as above *Minimum Generic Message Routing*.
 
@@ -159,11 +165,7 @@ when CLIENT_ACCEPTED {
 }
 ----
 
-=== BIG-IP Configuration Clean Up
-
-The scripts same as above *Minimum Generic Message Routing*.
-
-=== TEST
+=== How to run
 
 [source, bash]
 .*1. Start BANCS*
@@ -205,6 +207,10 @@ bancs -c -l 1 192.168.75.31
 16-Oct-2022 22:39:42 (1754) CARD: heartbeat receive
 ----
 
+=== Clean Up
+
+The scripts same as above *Minimum Generic Message Routing*.
+
 == Bi-Directional Persistence & Connection Auto-Initialization
 
 image:img/persistence-auto-initial.png[]
@@ -216,7 +222,7 @@ There are 2 BANCS and 2 CARD, ESB to send message to `192.168.75.56:8805` and st
 3. `192.168.75.55:8806` response message to `192.168.75.31:8805`
 4. `192.168.75.31:8805` response message to `192.168.75.56:8805` due to Bi-Directional Persistence
 
-=== BIG-IP Configuration Setting Up
+=== BIG-IP Configuration
 
 [source, bash]
 ----
@@ -239,27 +245,7 @@ tmsh create ltm virtual vs_BANCS_FROM_CARD { destination 192.168.75.31:8805 ip-p
 * link:files/IRULES_BANCS_TO_CARD[IRULES_BANCS_TO_CARD]
 * link:files/IRULES_BANCS_FROM_CARD[IRULES_BANCS_FROM_CARD]
 
-=== BIG-IP Configuration Clean Up
-
-[source, bash]
-----
-tmsh delete ltm virtual vs_BANCS_TO_CARD
-tmsh delete ltm virtual vs_BANCS_FROM_CARD
-tmsh delete ltm message-routing generic router router_BANCS_TO_CARD
-tmsh delete ltm message-routing generic router router_BANCS_FROM_CARD
-tmsh delete ltm message-routing generic route route_BANCS_TO_CARD
-tmsh delete ltm message-routing generic route route_BANCS_FROM_CARD
-tmsh delete ltm message-routing generic peer peer_BANCS_TO_CARD
-tmsh delete ltm message-routing generic peer peer_BANCS_FROM_CARD
-tmsh delete ltm pool pool_BANCS_TO_CARD
-tmsh delete ltm pool pool_BANCS_FROM_CARD
-tmsh delete ltm message-routing generic transport-config tc_BANCS_TO_CARD
-tmsh delete ltm message-routing generic transport-config tc_BANCS_FROM_CARD
-tmsh delete ltm message-routing generic protocol protocol_BANCS_CARD
-tmsh delete ltm profile tcp tcp3000
-----
-
-=== TEST
+=== How to run
 
 [source, bash]
 .*1. Start BANCS*
@@ -287,3 +273,22 @@ bancs -t -n 3 > /etc/bancs.data
 bancs -e 192.168.75.56
 ----
 
+=== Clean Up
+
+[source, bash]
+----
+tmsh delete ltm virtual vs_BANCS_TO_CARD
+tmsh delete ltm virtual vs_BANCS_FROM_CARD
+tmsh delete ltm message-routing generic router router_BANCS_TO_CARD
+tmsh delete ltm message-routing generic router router_BANCS_FROM_CARD
+tmsh delete ltm message-routing generic route route_BANCS_TO_CARD
+tmsh delete ltm message-routing generic route route_BANCS_FROM_CARD
+tmsh delete ltm message-routing generic peer peer_BANCS_TO_CARD
+tmsh delete ltm message-routing generic peer peer_BANCS_FROM_CARD
+tmsh delete ltm pool pool_BANCS_TO_CARD
+tmsh delete ltm pool pool_BANCS_FROM_CARD
+tmsh delete ltm message-routing generic transport-config tc_BANCS_TO_CARD
+tmsh delete ltm message-routing generic transport-config tc_BANCS_FROM_CARD
+tmsh delete ltm message-routing generic protocol protocol_BANCS_CARD
+tmsh delete ltm profile tcp tcp3000
+----
