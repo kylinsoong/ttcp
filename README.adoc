@@ -1,5 +1,7 @@
 = TTCP
 
+image:docs/img/ttcp-logo.png[]
+
 TTCP(Test TCP) is an utility to measure TCP throughput through an IP path, test tcp connection, transfers fabricated buffers or data copied from stdin.
 
 To use TTCP, start the receiver on one side of the path, then start the transmitter on the other side. The transmitting side sends a specified number of TCP packets to the receiving side. At the end of the test, the two sides display the number of bytes transmitted and the time elapsed for the packets to pass from one end to the other.
@@ -30,7 +32,7 @@ Refer to link:docs/USERGUIDE.adoc[User Guide] for usage reference, and link:docs
 
 === Native Networking Performance
 
-image:/docs/img/k8s-native-net-performance.png[]
+image:docs/img/k8s-native-net-performance.png[]
 
 link:docs/k8s-native-net-performance.csv[origin test statistics.]
 
