@@ -1,6 +1,6 @@
 Name:           ttcp
 Version:        1.13
-Release:        2
+Release:        3
 Summary:        Test TCP.
 
 License:        Apache 2.0

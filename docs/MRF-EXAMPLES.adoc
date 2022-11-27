@@ -7,6 +7,15 @@ This section provides an example of using Generic Message to implement a simple 
 
 https://techdocs.f5.com/en-us/bigip-15-1-0/big-ip-service-provider-generic-message-administration/generic-message-example.html
 
+=== BIG-IP Configuration
+
+[source, bash]
+----
+tmsh create ltm profile tcp tcp3000 idle-timeout 3000
+tmsh create ltm message-routing generic protocol protocol_CHAT { app-service none disable-parser yes }
+tmsh create ltm message-routing generic transport-config tc_CHAT { profiles add { tcp3000  protocol_CHAT  } rules { IRULES_CHAT } }
+----
+
 == Minimum Generic Message Routing
 
 image:img/minum-generic-message.png[]

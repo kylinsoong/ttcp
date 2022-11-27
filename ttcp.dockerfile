@@ -1,5 +1,6 @@
 # Base image
-FROM centos:7.9.2009
+#FROM centos:7.9.2009
+FROM redhat/ubi8-minimal:8.7-923
 
 # Set Label
 LABEL maintainer "kylinsoong.1214@gmail.com"
@@ -16,7 +17,8 @@ ARG TTCP_PLATFORM
 ADD target/$TTCP_NAME-$TTCP_VERSION.$TTCP_PLATFORM.rpm /ttcp
 
 # Compile the binaries
-RUN yum -y localinstall $TTCP_NAME-$TTCP_VERSION.$TTCP_PLATFORM.rpm
+#RUN yum -y localinstall $TTCP_NAME-$TTCP_VERSION.$TTCP_PLATFORM.rpm
+RUN rpm -ivh $TTCP_NAME-$TTCP_VERSION.$TTCP_PLATFORM.rpm
 
 EXPOSE 5001
 

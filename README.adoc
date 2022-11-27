@@ -4,12 +4,24 @@ image:docs/img/ttcp-logo.png[]
 
 TTCP(Test TCP) is an utility to measure TCP throughput through an IP path, test tcp connection, transfers fabricated buffers or data copied from stdin.
 
+TTCP has long history, original created in 18 Dec 84 under 4.2BSD, since then the TTCP improved or modified by several professor/students/engineers/architects, what in this branch there has 3 key improvements:
+
+* Add more options and a conf file /etc/ttcp.conf to adjust Linux Kernel TCP/IP profile in a fine-grained way
+* recv side multiple processes ability, which the server side support multi-threads, no exit once a transaction finished
+* cloud-native support, both recv and trans can run on K8S and Docker
+
 To use TTCP, start the receiver on one side of the path, then start the transmitter on the other side. The transmitting side sends a specified number of TCP packets to the receiving side. At the end of the test, the two sides display the number of bytes transmitted and the time elapsed for the packets to pass from one end to the other.
 
 [source, bash]
 .*Install TTCP*
 ----
 rpm -ivh ttcp-1.13-2.x86_64.rpm
+----
+
+[source, bash]
+.*Install TTCP(Docker)*
+----
+docker pull cloudadc/ttcp:1.13-3
 ----
 
 Either edit the options in `/etc/ttcp.conf` prior to TTCP starting, or pass options as arguments while TTCP starting
@@ -21,10 +33,17 @@ ttcp -t [-options] host [ < in ]
 ttcp -r [-options] [multicast-group][ > out]
 ----
 
-TTCP also contains other L4(TCP/UDP) client server app, 
+[source, bash]
+.*Run TTCP(Docker)*
+----
+// recv side
+docker run -it --rm --name ttcp-r  cloudadc/ttcp:1.13-3
 
-* chat  - chat messages from stdin and socket strams. 
-* echoS - display a line of text over socket stream.
+// trans side
+docker run -itd --rm --name ttcp-t --link ttcp-r cloudadc/ttcp:1.13-3
+docker exec -it ttcp-t bash
+ttcp -t ttcp-r
+----
 
 Refer to link:docs/USERGUIDE.adoc[User Guide] for usage reference, and link:docs/DEVGUIDE.adoc[Developer Guide] for development reference.
 
