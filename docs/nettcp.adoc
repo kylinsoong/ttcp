@@ -1256,10 +1256,54 @@ RTT,cubic,reno,htcp
 * TCP Congestion Control is for maximum use the network bandwidth even in high latency environment
 * The goal of congestion control is to determine how much capacity is available in the network, so that a source knows how many packets it can safely have in transit (inflight). 
 
+=== How the application level outage affect the data transfer?
 
+`ttcp` has a `-L` option that can simulate `recv` outage, this section will demonstrate the `recv` side's outage cause the data transfer significantly downgraded or high latency.
 
+When you use Wireshark to analyze a packet capture, it performs analysis on TCP connections and is able to flag certain behaviors that can help understand TCP performance. Some of these correspond to specific TCP messages, while others are Wireshark highlighting a connection state. These flags include:
 
+* TCP Window Full
+* TCP ZeroWindow
+* TCP Retransmission
+* TCP Dup Ack
 
+The application level outage most likely will geneated this kinds of flag if you use Wireshark to capture the packets.
+
+Before the detailed depiction of these flags, fistly list the following terminology specific to TCP:
+
+* *Receive Window* - also simply called the TCP window, this is advertised by a TCP receiver to its peer. It is the window that is visible in the capture, and may be different in either direction in a connection. The receive window is usually the size of the available receive buffer. TCP receivers can adjust the size of the receive window by changing the window value in ACKs they transmit. 
+* *Send Window* - technically the congestion window, this is an internal value in a TCP sender which indicates the maximum amount of data it can send without receiving an acknowledgement. This is constantly adjusted by the TCP Congestion Control algorithm. This value cannot be observed in a capture; it can be inferred, if a sender stops sending data even though the recipient's receive window is not full, but the actual value is never sent on the network.
+* *Bytes In Flight* - this is the term Wireshark uses to indicate the amount of unacknowledged data a TCP sender has transmitted. It is always less than or equal to the recipient's receive window.
+
+*TCP Window Full:* if a TCP sender transmits a packet which results in the number of unacknowledged bytes - or bytes in flight - being the same as the recipient's receive window, this is called filling the window, and Wireshark reports TCP Window Full. When you see TCP Window Full flags, it usually means that the sender is using the full capacity of the TCP flow, limited by the recipient's receive window. The network may have higher capacity.   
+
+*TCP Zero Window:* When a TCP receiver's buffer begins to fill, it can reduce its receive window. If it fills, it can reduce the window to zero, which tells the TCP sender to stop sending. This is called "closing the window". Typically this indicates that the network is delivering traffic faster than the receiver can process it. 
+
+*TCP Retransmission:* When TCP sends a packet, it waits for an acknowledgment to confirm if the packets sent by the sender are received by the receiving party. If the acknowledgment is not received within the timeout interval (known as the retransmission timeout or RTO), the sender retransmits the packet. Retransmissions can also be forced when a TCP sender receives duplicate ACKs.
+
+*TCP Duplicate ACK:* When a TCP receiver receives packets out of order, which it interprets as data loss, it sends an ACK indicating the expected sequence number. After two duplicate ACKs, a TCP sender begins retransmission. 
+
+[source, bash]
+.*On the recv side, open 3 terminals and run the following commands:*
+----
+ttcp -r -l 512 -L 
+tcpdump -nni ens33 port 5001 -w ttcp-r.pcap
+for i in {1..300} ; do netstat -nt | grep 5001 | awk '{print $2, $3}'; sleep 1 ; done
+----
+
+[source, bash]
+.*One the trans side, open 3 terminals and run the following commands:*
+----
+tcpdump -nni ens33 host 10.1.10.205 -w ttcp-t.pcap
+for i in {1..300} ; do netstat -nt | grep 5001 | awk '{print $2, $3}'; sleep 1 ; done
+ttcp -n 10 -t 10.1.10.205
+----
+
+The raw data for collected ttcp-t send queue and ttcp-r recv queue as link:files/send-recv-q.csv[send-recv-q.csv], the reference linear diagram as below:
+
+image:img/tcp-readwrite-buffer.png[]
+
+Note that the maximum size of `ttcp-t` send buffer is *417560*, and the maximum size of `ttcp-r` receive buffer is *889396*
 
 == L4 Proxy/LB Device & Software
 
