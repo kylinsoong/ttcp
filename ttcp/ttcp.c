@@ -121,6 +121,7 @@ char *sport = "";               /* TCP/UDP port number for trans*/
 char *port = "5001";		/* TCP/UDP port number */
 char *host;			/* ptr to name of host */
 int trans;			/* 0=receive, !0=transmit mode */
+int latency = 0;                /* 1=enable, 0=disable*/
 int sinkmode = 0;		/* 0=normal I/O, !0=sink/source mode */
 int verbose = 0;		/* 0=print basic info, 1=print cpu rate, proc
 				 * resource usage. */
@@ -174,6 +175,7 @@ Options specific to -t:\n\
 Options specific to -r:\n\
 	-B	for -s, only output full blocks as specified by -l (for TAR)\n\
 	-T	\"touch\": access each byte as it's read\n\
+        -L      enable the receive side to sleep in a random integer(one of 1, 2, 3), to simulate application level lency\n\
         -I if   Specify the network interface (e.g. eth0) to use\n\
 ";	
 
@@ -264,6 +266,8 @@ int main(int argc, char **argv)
                 fmt = val[0] ;
             } else if (strcmp(key, "nbuf") == 0 && atoi(val) > 0) {
                 nbuf = atoi(val);
+            } else if (strcmp(key, "latency") == 0 && atoi(val) > 0) {
+                latency = atoi(val);
             } else if (strcmp(key, "ttcp.tcp.nodelay") == 0 && strlen(val) == 1 && val[0] == '1') {
                 nodelay = 1;
             } else if (strcmp(key, "write_interval") == 0 && strlen(val) > 0) {
@@ -293,7 +297,7 @@ int main(int argc, char **argv)
     }
     
 
-    while ((c = getopt(argc, argv, "46drstuvBDTb:f:l:n:p:w:P:A:O:I:")) != -1) {
+    while ((c = getopt(argc, argv, "46drstuvBDTLb:f:l:n:p:w:P:A:O:I:")) != -1) {
         switch (c) {
         case '4':
             af = AF_INET;
@@ -349,6 +353,9 @@ int main(int argc, char **argv)
             break;
         case 'A':
             bufalign = atoi(optarg);
+            break;
+        case 'L':
+            latency = 1;
             break;
         case 'O':
             bufoffset = atoi(optarg);
@@ -484,7 +491,7 @@ int main(int argc, char **argv)
 
     } else {
 
-        fprintf(stderr, "ttcp-r: buflen=%d, nbuf=%d, align=%d/%d, port=%s", buflen, nbuf, bufalign, bufoffset, port);
+        fprintf(stderr, "ttcp-r: buflen=%d, align=%d/%d, port=%s", buflen, bufalign, bufoffset, port);
 
         if(!sockbufsize && sockrcvbufsize) {
             sockbufsize = sockrcvbufsize;
@@ -770,7 +777,6 @@ int main(int argc, char **argv)
                 }
 
             } else {
-
                 while ((cnt = Nread(connfd, buf, buflen)) > 0)  {
                     nbytes += cnt;
                 }
@@ -855,11 +861,17 @@ void receive(int connfd, const char *peer)
     register int cnt;
 
     if (sinkmode) {
-        while ((cnt = Nread(connfd, buf, buflen)) > 0)  
+        while ((cnt = Nread(connfd, buf, buflen)) > 0) {  
             nbytes += cnt;
+            /* #14: add threshold for simulate application level Latency */
+            if(latency && numCalls % 256 == 0) {
+                sleep(rand() % 3);
+            }
+        }
     } else {
-        while ((cnt = Nread(connfd, buf, buflen)) > 0 && write(1, buf, cnt) == cnt)
+        while ((cnt = Nread(connfd, buf, buflen)) > 0 && write(1, buf, cnt) == cnt) {
             nbytes += cnt;       
+        }
     }
 
     if (errno)
@@ -1168,65 +1180,66 @@ psecs(long l, register char *cp)
 /*
  *			N R E A D
  */
-int
-Nread(int fd, void *buf, int count)
+int Nread(int fd, void *buf, int count)
 {
-	struct sockaddr_in from;
-	socklen_t len = sizeof(from);
-	register int cnt;
-	if (udp) {
-		cnt = recvfrom(fd, buf, count, 0, (struct sockaddr *)&from, &len);
-		numCalls++;
-	} else {
-		if (b_flag)
-			cnt = mread(fd, buf, count);	/* fill buf */
-		else {
-			cnt = read(fd, buf, count);
-			numCalls++;
-		}
-		if (touchdata && cnt > 0) {
-			register int c = cnt, sum = 0;
-			register char *b = buf;
-			while (c--)
-				sum += *b++;
-		}
-	}
-	return(cnt);
+    struct sockaddr_in from;
+    socklen_t len = sizeof(from);
+    register int cnt;
+
+    if (udp) {
+        cnt = recvfrom(fd, buf, count, 0, (struct sockaddr *)&from, &len);
+        numCalls++;
+    } else {
+        if (b_flag)
+            cnt = mread(fd, buf, count);	/* fill buf */
+        else {
+            cnt = read(fd, buf, count);
+            numCalls++;
+        }
+        if (touchdata && cnt > 0) {
+            register int c = cnt, sum = 0;
+            register char *b = buf;
+            while (c--)
+                sum += *b++;
+        }
+    }
+    return(cnt);
 }
 
 /*
  *			N W R I T E
  */
-int
-Nwrite(int fd, void *buf, int count)
+int Nwrite(int fd, void *buf, int count)
 {
-	register int cnt;
-	if (udp) {
+    register int cnt;
+    if (udp) {
 again:
-		cnt = sendto(fd, buf, count, 0, (struct sockaddr *)res->ai_addr, res->ai_addrlen);
-		numCalls++;
-		if (cnt<0 && errno == ENOBUFS)  {
-			delay(18000);
-			errno = 0;
-			goto again;
-		}
-	} else {
-		cnt = write(fd, buf, count);
-		numCalls++;
-	}
-	if (wait)
-		delay(wait);
-	return(cnt);
+        cnt = sendto(fd, buf, count, 0, (struct sockaddr *)res->ai_addr, res->ai_addrlen);
+        numCalls++;
+        if (cnt<0 && errno == ENOBUFS)  {
+            delay(18000);
+            errno = 0;
+            goto again;
+        }
+    } else {
+        cnt = write(fd, buf, count);
+        numCalls++;
+    }
+
+    if (wait) {
+        delay(wait);
+    }
+
+    return(cnt);
 }
 
-void
-delay(int us)
+void delay(int us)
 {
-	struct timeval tv;
+    struct timeval tv;
 
-	tv.tv_sec = 0;
-	tv.tv_usec = us;
-	(void)select(1, NULL, NULL, NULL, &tv);
+    tv.tv_sec = 0;
+    tv.tv_usec = us;
+    (void)select(1, NULL, NULL, NULL, &tv);
 }
 
 /*
@@ -1238,25 +1251,27 @@ delay(int us)
  * network connections don't deliver data with the same
  * grouping as it is written with.  Written by Robert S. Miles, BRL.
  */
-int
-mread(int fd, register char *bufp, unsigned int n)
+int mread(int fd, register char *bufp, unsigned int n)
 {
-	register unsigned	count = 0;
-	register int		nread;
+    register unsigned	count = 0;
+    register int	nread;
 
-	do {
-		nread = read(fd, bufp, n-count);
-		numCalls++;
-		if(nread < 0)  {
-			perror("ttcp_mread");
-			return(-1);
-		}
-		if(nread == 0)
-			return((int)count);
-		count += (unsigned)nread;
-		bufp += nread;
-	 } while(count < n);
+    do {
+        nread = read(fd, bufp, n-count);
+        numCalls++;
+        if(nread < 0) {
+            perror("ttcp_mread");
+            return(-1);
+        }
 
-	return((int)count);
+        if(nread == 0) {
+            return((int)count);
+        }
+
+        count += (unsigned)nread;
+        bufp += nread;
+    } while(count < n);
+
+    return((int)count);
 }
 
