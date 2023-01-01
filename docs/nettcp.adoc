@@ -1303,7 +1303,58 @@ The raw data for collected ttcp-t send queue and ttcp-r recv queue as link:files
 
 image:img/tcp-readwrite-buffer.png[]
 
-Note that the maximum size of `ttcp-t` send buffer is *417560*, and the maximum size of `ttcp-r` receive buffer is *889396*
+Note that the maximum size of `ttcp-t` send buffer is *417560*, and the maximum size of `ttcp-r` receive buffer is *889396*, the tcp send buffer and receive buffer controlled by the following 2 parameters:
+
+[source, bash]
+----
+# sysctl net.ipv4.tcp_wmem
+net.ipv4.tcp_wmem = 4096	16384	4194304
+# sysctl net.ipv4.tcp_rmem
+net.ipv4.tcp_rmem = 4096	87380	6291456
+----
+
+which the initial send buffer size in `ttcp-t` host is `16384 bytes`, the maximum send buffer size is `4194304`, the initial receive buffer size in `ttcp-r` host is `87380 bytes`, and the maximum receive buffer size is `6291456`.
+
+*Download tcpdump pcap files:* 
+
+* Download Link: https://pan.baidu.com/s/14_G3SrHgHwzujTOCscEgoQ 
+* Download Code: 3258
+
+*Wireshark TCP Window Full*
+
+image:img/tcp-latency-window-full.png[]
+
+The `ttcp-t` has send quite a lot of bytes to `ttcp-r`, but not receive the acknowledgement from `ttcp-r`, all unacknowledged bytes are in `ttcp-r` receive buffer, Due to *unacknowledged bytes size requals with ttcp-r's receive window*, so Wireshark reports *TCP Window Full*.
+
+*Wireshark TCP Zero Window*
+
+image:img/tcp-latency-zero-window.png[]
+
+Due to `ttcp-r's` receive buffer begins to fill, the receive window begins to reduce, the receive window reduced to 0, and tell the `ttcp-t` to stop sending, so Wireshark reports *TCP ero Window* to hint this.
+
+*Wireshark TCP Dup Ack*
+
+image:img/tcp-latency-dup-ack.png[]
+
+Wireshark reports *TCP Dup Ack* probably caused by `ttcp-r` receives packets out of order, which it interprets as data loss, it sends an ACK indicating the expected sequence number.
+
+*Wireshark TCP Retransmission*
+
+image:img/tcp-latency-retransimission.png[]  
+
+This probably caused by `ttcp-t` sends a packet, it waits for an acknowledgment to confirm if the packets sent by the sender are received by the receiving party. If the acknowledgment is not received within the timeout interval (known as the retransmission timeout or RTO), the `ttcp-t` retransmits the packet.
+
+*tcodump raw data:*
+
+* link:files/ttcp-t-raw.csv[ttcp-t-raw.csv]
+* link:files/ttcp-r-raw.csv[ttcp-r-raw.csv]
+
+image:img/ttcp-r-receive-window-size.png[]
+
+Note that the maximum window size is 64240, the smallest window size is 0, which trigger Zero Window a showed in above.
+
+
+
 
 == L4 Proxy/LB Device & Software
 
