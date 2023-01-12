@@ -1,0 +1,28 @@
+= Test
+:toc: manual
+
+== heartbeat support
+
+[source, bash]
+.*1. Start bancs*
+----
+./a.out -b 127.0.0.1 -l 1 -h
+----
+
+[source, bash]
+.*2. Start card*
+----
+./a.out -c 127.0.0.1 -l 1 -h
+----
+
+[source, bash]
+.*3. Generate messages*
+----
+./a.out -t -n 5 -h > /etc/bancs.data
+----
+
+[source, bash]
+.*4. Start ESB*
+----
+./a.out -e 127.0.0.1 -h
+----

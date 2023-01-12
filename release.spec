@@ -1,6 +1,6 @@
 Name:           ttcp
-Version:        1.13
-Release:        3
+Version:        1.14
+Release:        1
 Summary:        Test TCP.
 
 License:        Apache 2.0
@@ -31,6 +31,8 @@ make %{?_smp_mflags}
 /etc/bancs.data
 
 %changelog
+* Sun Jan 25 2023 Kylin Soong <kylinsoong.1214@gmail.com> - 1.14-1
+- add heartbeat support
 * Sun Sep 25 2022 Kylin Soong <kylinsoong.1214@gmail.com> - 1.13-1
 - add core banking bancs card demostration project
 * Mon Apr 24 2022 Kylin Soong <kylinsoong.1214@gmail.com> - 1.12-1
