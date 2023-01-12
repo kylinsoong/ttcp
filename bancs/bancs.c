@@ -100,6 +100,8 @@ short inport = 9805;
 char *host;                     /* ptr to name of host */
 int server = 1;                 /* 0=esb, 1=bancs, 2=card, 3=tools */
 int debug = 0 ;
+int heartbeat = 0 ;
+int pkgprefix = 5; /* Package prefix is 5, if heartbeat is enable, the packge prefix is 9*/
 
 int p[2];
 
@@ -124,6 +126,7 @@ Common options:\n\
         -d      enable debug logging\n\
         -l ##   the length of lay time of Init wait Listener (default 8 seconds, which means once Listener init finished and 8 * 10 seconds later, the Init start)\n\
         -p ##   port number to send to or listen at (default 8805/8806 9805)\n\
+        -h      whether the message started with heartbeat package\n\
 Common options for -t:\n\
         -m ##   specify the version of the ISO8583 standard, allowed value are 0-9\n\
         -n ##   total number of message to generated\n\
@@ -179,11 +182,12 @@ void     Str_puts(int);
 
 int main(int argc, char **argv) 
 {
+
     if (argc < 2) goto usage;
 
     // parse the main argv
     int c;
-    while ((c = getopt(argc, argv, "ebctdl:p:m:n:k:")) != -1) {
+    while ((c = getopt(argc, argv, "ebctdhl:p:m:n:k:")) != -1) {
         switch (c) {
         case 'e':
             server = 0;
@@ -204,6 +208,10 @@ int main(int argc, char **argv)
             break;
         case 'd':
             debug = 1;
+            break;
+        case 'h':
+            heartbeat = 1;
+            pkgprefix = 9;
             break;
         case 'n':
             num = atoi(optarg);
@@ -233,13 +241,15 @@ int main(int argc, char **argv)
     }
 
     if( server == 0 || server == 1 || server == 2) {
-
+printf("%d, %d\n", optind, argc);
         if (optind == argc) {
             goto usage;
         }
   
         host = argv[optind];
+    }
 
+    if (server == 1 || server == 2) {
         if (pipe(p) < 0)
             err_sys("pipe");
     }
@@ -270,9 +280,9 @@ int main(int argc, char **argv)
 
             strtok(bufr, "\n");
 
-            char strmsglen[5];
-            strncpy(strmsglen, bufr, 5);
-            int len = extlength(strmsglen) + 5;
+            char strmsglen[pkgprefix];
+            strncpy(strmsglen, bufr, pkgprefix);
+            int len = extlength(strmsglen) + pkgprefix;
 
             if(strlen(bufr) != len) {
                 out_sys(concat("Invalid message, message length is not equals header defined length, message: ", bufr));
@@ -517,11 +527,11 @@ void  WriteToSock(int fd) {
     int nbytes;
     char inbuf[MAX_DATA_LINE];
     while ((nbytes = read(p[0], inbuf, MAX_DATA_LINE)) > 0) {
-        char header[5];
-        strncpy(header, inbuf, 5);
+        char header[pkgprefix];
+        strncpy(header, inbuf, pkgprefix);
         int datalen = extlength(header);
 
-        inbuf[datalen + 5] = '\0';
+        inbuf[datalen + pkgprefix] = '\0';
 
         if(debug) {
             char extMessage[MAX_DATA_LINE];
@@ -529,7 +539,7 @@ void  WriteToSock(int fd) {
             out_sys(extMessage);
         }
 
-        inbuf[datalen + 5] = '\0';
+        inbuf[datalen + pkgprefix] = '\0';
 
         Writen(fd, inbuf, strlen(inbuf));
 
@@ -567,9 +577,9 @@ void ReadFromSock(int connfd) {
 
     for(;;) {
 
-        char header[5];
-        Readn(connfd, header, 5);
-        header[5] = '\0';
+        char header[pkgprefix];
+        Readn(connfd, header, pkgprefix);
+        header[pkgprefix] = '\0';
         int datalen = extlength(header);
 
         if(datalen <= 0) {
@@ -585,13 +595,13 @@ void ReadFromSock(int connfd) {
 
         if(strcmp(message, "0000") == 0  && datalen == 4 && !is_bancs_from_esb) {
             out_sys("heartbeat receive");
-            memset(header, 0, 5);
+            memset(header, 0, pkgprefix);
             memset(message, 0, datalen); 
             continue;
         }
 
         char *total = concat(header, message);
-        total[datalen + 5] = '\0';
+        total[datalen + pkgprefix] = '\0';
 
         if(debug) {
             char str[80];
@@ -609,13 +619,13 @@ void ReadFromSock(int connfd) {
             out_sys(concat("received message from bancs, message: ", total));
         }
 
-        write(p[1], total, datalen + 5);
+        write(p[1], total, datalen + pkgprefix);
 
         if(debug) {
             out_sys(concat("add message to pipe, message: ", total));
         }
 
-        memset(header, 0, 5);
+        memset(header, 0, pkgprefix);
         memset(message, 0, datalen); 
     }
 
@@ -892,16 +902,16 @@ int extlength(void *vptr)
 
     strmsglen = vptr;
     cur = 0;
-    for (i = 0 ; i < 5 ; i ++) {
+    for (i = 0 ; i < pkgprefix ; i ++) {
         if(strmsglen[i] == '0' || strmsglen[i] == '-') {
             cur++ ;
         } else {
             break;
         }
     }
-    char substrmsglen[5-cur];
+    char substrmsglen[pkgprefix - cur];
     int index = 0;
-    for(cur ; cur < 5 ; cur++)
+    for(cur ; cur < pkgprefix ; cur++)
         substrmsglen[index++] = strmsglen[cur];
 
     int msglen = atoi(substrmsglen);
@@ -931,8 +941,14 @@ void generate(int num, int kind) {
        
         char *message = malloc(kind +5);
 
-        // header: length: 5
-        char *header = leftpadding(5, kind, '-');
+        // header: length: pkgprefix
+        char *pad;
+        if (heartbeat) {
+            *pad = '0';
+        } else {
+            *pad = '-';
+        }
+        char *header = leftpadding(pkgprefix, kind, *pad);
         message = concat(header, "        ");
 
         // mit: four numeric digits that specify the version of the ISO8583 standard.
