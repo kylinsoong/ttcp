@@ -241,7 +241,7 @@ int main(int argc, char **argv)
     }
 
     if( server == 0 || server == 1 || server == 2) {
-printf("%d, %d\n", optind, argc);
+
         if (optind == argc) {
             goto usage;
         }
