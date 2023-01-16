@@ -12,6 +12,7 @@ target
 .classpath
 .settings
 .class
+.zip
 
 # Ignore IDEA files
 *.iml
