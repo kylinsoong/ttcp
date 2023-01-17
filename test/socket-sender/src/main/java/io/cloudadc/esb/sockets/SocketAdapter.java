@@ -50,18 +50,20 @@ public class SocketAdapter implements CommandLineRunner {
 				help();
 			}
 		}
+        
+        if(count < 3) {
+			count = 3;
+		}
 				
 		if(isServer) {
-			serverimpl();
+			serverimpl(count);
 		}
 		
 		if(host.equals("") || port == 0) {
 			help();
 		}
 		
-		if(count < 3) {
-			count = 3;
-		}
+		
 		
 		SocketAddress address = new InetSocketAddress(host, port);
 		Socket socket = new Socket();
@@ -112,9 +114,8 @@ public class SocketAdapter implements CommandLineRunner {
 
 	}
 
-    private void serverimpl() throws Exception {
+    private void serverimpl(int count) throws Exception {
 		
-		@SuppressWarnings("resource")
 		ServerSocket serverSocket = new ServerSocket(12345);
 		log.info("server socket started on: " + serverSocket);
 		
@@ -123,6 +124,8 @@ public class SocketAdapter implements CommandLineRunner {
 		
 		InputStream in = socket.getInputStream();
 		
+		int c = 0;
+		
 		while(true) {
 			byte[] bufHeader = in.readNBytes(9);
 			String header = new String(bufHeader);
@@ -130,9 +133,15 @@ public class SocketAdapter implements CommandLineRunner {
 			byte[] bufpayload = in.readNBytes(payloadLen);
 			String payload = new String(bufpayload);
 			log.info("Received message, header: " + header + ", payload length: " + payloadLen + ", total length: " + (header.length() + payload.length()) + ", message: " + header + payload.substring(0, 50));
+		    
+			if(++c == count) {
+		    	break;
+		    } 
 		}
 		
+		serverSocket.close();
 		
+		Runtime.getRuntime().exit(0);
 	}
 	
 	private String trimzero(String header) {
