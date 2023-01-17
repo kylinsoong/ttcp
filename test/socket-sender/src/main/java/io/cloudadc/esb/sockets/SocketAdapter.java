@@ -1,7 +1,9 @@
 package io.cloudadc.esb.sockets;
 
 import java.io.DataOutputStream;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketAddress;
 
@@ -16,13 +18,13 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class SocketClient implements CommandLineRunner {
+public class SocketAdapter implements CommandLineRunner {
 	
 	
-	Logger log = LoggerFactory.getLogger(SocketClient.class);
+	Logger log = LoggerFactory.getLogger(SocketAdapter.class);
 
 	public static void main(String[] args) {
-		SpringApplication.run(SocketClient.class, args);
+		SpringApplication.run(SocketAdapter.class, args);
 	}
 
 	@Override
@@ -32,18 +34,25 @@ public class SocketClient implements CommandLineRunner {
 		String host = "";
 		int port = 0;	
 		int count = 0;
-		
-		for(int i = 0 ; i < args.length ; i++) {
+		boolean isServer = false ;
+
+        for(int i = 0 ; i < args.length ; i++) {
 			
 			if(args[i].equals("--host")  || args[i].equals("-h") ) {
 				host = args[++i];
 			} else if (args[i].equals("--port")  || args[i].equals("-p") ) {
 				port = Integer.parseInt(args[++i]);
-			}  else if (args[i].equals("--count")  || args[i].equals("-c") ) {
+			} else if (args[i].equals("--count")  || args[i].equals("-c") ) {
 				count = Integer.parseInt(args[++i]);
-			}  else if (args[i].equals("--help")) {
+			} else if (args[i].equals("--server")  || args[i].equals("-s") ) {
+				isServer = true;
+			} else if (args[i].equals("--help")) {
 				help();
 			}
+		}
+				
+		if(isServer) {
+			serverimpl();
 		}
 		
 		if(host.equals("") || port == 0) {
@@ -95,7 +104,6 @@ public class SocketClient implements CommandLineRunner {
 			
 			out.write(msg.getBytes());
 			log.info("write to sockets, message length: " + msg.length() + ", payload length: " + payload.length() + ", header: " + header);
-			
 		}
 		
 		socket.close();
@@ -103,7 +111,38 @@ public class SocketClient implements CommandLineRunner {
 		log.info(address + " closed");
 
 	}
+
+    private void serverimpl() throws Exception {
+		
+		@SuppressWarnings("resource")
+		ServerSocket serverSocket = new ServerSocket(12345);
+		log.info("server socket started on: " + serverSocket);
+		
+		Socket socket = serverSocket.accept();
+		log.info("Received a socket: " + socket);
+		
+		InputStream in = socket.getInputStream();
+		
+		while(true) {
+			byte[] bufHeader = in.readNBytes(9);
+			String header = new String(bufHeader);
+			Integer payloadLen = Integer.parseInt(trimzero(header));
+			byte[] bufpayload = in.readNBytes(payloadLen);
+			String payload = new String(bufpayload);
+			log.info("Received message, header: " + header + ", payload length: " + payloadLen + ", total length: " + (header.length() + payload.length()) + ", message: " + header + payload.substring(0, 50));
+		}
+		
+		
+	}
 	
+	private String trimzero(String header) {
+		
+		if(header.startsWith("0")) {
+			trimzero(header.substring(1));
+		}
+		return header;
+	}
+
 	private String buildHeader(int number) {
 		
 		String str = String.valueOf(number);

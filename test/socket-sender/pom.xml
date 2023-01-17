@@ -9,8 +9,8 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.example</groupId>
-	<artifactId>esb-socket-sender</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<artifactId>esb-socket-adapter</artifactId>
+	<version>0.0.1</version>
 	<name>consuming-rest</name>
 	<description>Demo project for Spring Boot</description>
 
