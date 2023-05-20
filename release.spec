@@ -1,6 +1,6 @@
 Name:           ttcp
 Version:        1.14
-Release:        1
+Release:        2
 Summary:        Test TCP.
 
 License:        Apache 2.0

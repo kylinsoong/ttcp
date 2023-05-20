@@ -15,13 +15,13 @@ To use TTCP, start the receiver on one side of the path, then start the transmit
 [source, bash]
 .*Install TTCP*
 ----
-rpm -ivh ttcp-1.13-2.x86_64.rpm
+rpm -ivh ttcp-1.14-2.x86_64.rpm
 ----
 
 [source, bash]
 .*Install TTCP(Docker)*
 ----
-docker pull cloudadc/ttcp:1.13-3
+docker pull cloudadc/ttcp:1.14-2
 ----
 
 Either edit the options in `/etc/ttcp.conf` prior to TTCP starting, or pass options as arguments while TTCP starting
@@ -37,13 +37,13 @@ ttcp -r [-options] [multicast-group][ > out]
 .*Run TTCP(Docker)*
 ----
 // recv side
-docker run -it --rm --name ttcp-r  cloudadc/ttcp:1.13-3
+docker run -it --rm --name ttcp-r  cloudadc/ttcp:1.14-2
 
 // trans side
-docker run -itd --rm --name ttcp-t --link ttcp-r cloudadc/ttcp:1.13-3
-docker exec -it ttcp-t bash
-ttcp -t ttcp-r
+docker run --rm --link ttcp-r cloudadc/ttcp:1.14-2-cli ttcp -t ttcp-r
 ----
+
+Dockerhub link: https://hub.docker.com/r/cloudadc/ttcp.
 
 Refer to link:docs/USERGUIDE.adoc[User Guide] for usage reference, and link:docs/DEVGUIDE.adoc[Developer Guide] for development reference.
 
