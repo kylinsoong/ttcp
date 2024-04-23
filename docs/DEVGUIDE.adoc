@@ -1,6 +1,15 @@
 = Development Guide
 :toc: manual
 
+== How to create a dep
+
+[source, bash]
+.*1. Install the required software*
+----
+sudo apt update
+sudo apt install dpkg-dev debhelper
+----
+
 == How to create a rpm?
 
 [source, bash]
