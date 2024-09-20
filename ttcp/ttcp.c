@@ -358,7 +358,7 @@ int main(int argc, char **argv)
             bufalign = atoi(optarg);
             break;
         case 'L':
-            latency = atoi(optarg);
+            latency = 1;
             break;
         case 'O':
             bufoffset = atoi(optarg);
