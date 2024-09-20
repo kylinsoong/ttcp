@@ -67,6 +67,9 @@
  *     recv multiple processes ability      
  *     add /etc/ttcp.conf for holding configuration
  *
+ * Modified Sep 2024 by Kylin Soong <kylinsoong.1214@gmail.com>
+ *     add -L to simulate application latency.
+ *
  * Distribution Status -
  *      Public Domain.  Distribution Unlimited.
  */
@@ -175,7 +178,7 @@ Options specific to -t:\n\
 Options specific to -r:\n\
 	-B	for -s, only output full blocks as specified by -l (for TAR)\n\
 	-T	\"touch\": access each byte as it's read\n\
-        -L      enable the receive side to sleep in a random integer(one of 1, 2, 3), to simulate application level lency\n\
+        -L      enable the receive side to sleep in a random integer(one of 1, 2, 3), to simulate application level latency\n\
         -I if   Specify the network interface (e.g. eth0) to use\n\
 ";	
 
@@ -355,7 +358,7 @@ int main(int argc, char **argv)
             bufalign = atoi(optarg);
             break;
         case 'L':
-            latency = 1;
+            latency = atoi(optarg);
             break;
         case 'O':
             bufoffset = atoi(optarg);
@@ -862,11 +865,12 @@ void receive(int connfd, const char *peer)
 
     if (sinkmode) {
         while ((cnt = Nread(connfd, buf, buflen)) > 0) {  
-            nbytes += cnt;
-            /* #14: add threshold for simulate application level Latency */
-            if(latency && numCalls % 256 == 0) {
-                sleep(rand() % 3);
+            if (latency > 0) {
+                int delay = rand() % 4;
+                fprintf(stderr, "ttcp-r: worker %d, force delay %d s\n", (int)getpid(), delay);
+                sleep(delay);
             }
+            nbytes += cnt;
         }
     } else {
         while ((cnt = Nread(connfd, buf, buflen)) > 0 && write(1, buf, cnt) == cnt) {
