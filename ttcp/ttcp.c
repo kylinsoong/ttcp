@@ -726,11 +726,14 @@ int main(int argc, char **argv)
 
                     receive(connfd, addr_buf);
 
+                    free(addr_buf);
                     exit(0);
                 }
 
                 if (close(connfd) == -1)
                     err("close");
+
+                free(addr_buf);
             }
 
             /* #3 peer source address contain port, add a sock_ntop() function to handle, apeend port
@@ -846,6 +849,10 @@ int main(int argc, char **argv)
     if (verbose) {
         fprintf(stderr, "ttcp%s: buffer address %p\n", trans ? "-t" : "-r", buf);
     }
+
+    if (res) freeaddrinfo(res);
+    if (res0) freeaddrinfo(res0);
+    if (rec) freeaddrinfo(rec);
 
     exit(0);
 
