@@ -38,7 +38,7 @@
  *	fix loads of more warnings
  *	use snprintf with a few fixed-sized buffers, fix format strings 
  *
- * Modified Oct 2001 by Jaakko Kyrö <jkyro@cs.helsinki.fi>
+ * Modified Oct 2001 by Jaakko Kyrï¿½ <jkyro@cs.helsinki.fi>
  *      Added -I option to specify network interface
  *
  * Modified Oct 2002 by Pekka Savola <pekkas@netcore.fi>
@@ -100,6 +100,18 @@ static char * useRCSid = ( RCSid + ( (char *)&useRCSid - (char *)&useRCSid ) );
 
 #define MAX_CONF_LINE 150
 
+#ifdef __APPLE__
+#ifndef TCP_KEEPIDLE
+#define TCP_KEEPIDLE TCP_KEEPALIVE
+#endif
+#ifndef TCP_KEEPINTVL
+#define TCP_KEEPINTVL 0x10
+#endif
+#ifndef TCP_KEEPCNT
+#define TCP_KEEPCNT 0x11
+#endif
+#endif
+
 struct sockaddr_storage frominet;
 struct addrinfo hints, *res, *res0;
 struct addrinfo hintc, *rec;
@@ -145,7 +157,7 @@ int tcp_keepalive_intvl = 75;
 int tcp_keepalive_probes = 9;
 
 int touchdata = 0;		/* access data after reading */
-static long wait = 0;		/* usecs to wait between each write */
+static long write_interval = 0;		/* usecs to wait between each write */
 int af =  AF_UNSPEC;		/* Address family to be determined */
 char *device = NULL;
 
@@ -274,7 +286,7 @@ int main(int argc, char **argv)
             } else if (strcmp(key, "ttcp.tcp.nodelay") == 0 && strlen(val) == 1 && val[0] == '1') {
                 nodelay = 1;
             } else if (strcmp(key, "write_interval") == 0 && strlen(val) > 0) {
-                wait = strtol(val, (char **)NULL, 10);
+                write_interval = strtol(val, (char **)NULL, 10);
             } else if (strcmp(key, "source_port") == 0 && atoi(val) > 1023 && atoi(val) < 65535) {
                 char result[5];
                 strcpy(result, val);
@@ -349,7 +361,7 @@ int main(int argc, char **argv)
             verbose = 1;
             break;
         case 'w':
-            wait = strtol(optarg, (char **)NULL, 10);
+            write_interval = strtol(optarg, (char **)NULL, 10);
             break;
         case 'P':
             sport = optarg;
@@ -1230,8 +1242,8 @@ again:
         numCalls++;
     }
 
-    if (wait) {
-        delay(wait);
+    if (write_interval) {
+        delay(write_interval);
     }
 
     return(cnt);

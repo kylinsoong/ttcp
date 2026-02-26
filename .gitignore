@@ -18,6 +18,7 @@ target
 *.iml
 *.ipr
 *.iws
+.trae
 /.idea
 
 war
