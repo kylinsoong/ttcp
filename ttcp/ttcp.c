@@ -228,6 +228,8 @@ int main(int argc, char **argv)
     int maf = 0;		/* Address family if multicast, else 0 */
     int c;
 
+    srand(time(NULL));
+
     if (argc < 2) goto usage;
 
     if((fp = fopen("/etc/ttcp.conf","r")) != NULL) {
