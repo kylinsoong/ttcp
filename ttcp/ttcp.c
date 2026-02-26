@@ -256,8 +256,8 @@ int main(int argc, char **argv)
             } else if (strcmp(key, "protocol") == 0 && strcmp(val, "udp") == 0) {
                 udp = 1;
             } else if (strcmp(key, "port") == 0 && atoi(val) > 1023 && atoi(val) < 65535) {
-                char result[5];
-                strcpy(result, val);
+                char result[6];
+                snprintf(result, sizeof(result), "%s", val);
                 port = result;
             } else if (strcmp(key, "silent") == 0 && strlen(val) == 1 && val[0] == '1') {
                 sinkmode = !sinkmode;
@@ -288,16 +288,16 @@ int main(int argc, char **argv)
             } else if (strcmp(key, "write_interval") == 0 && strlen(val) > 0) {
                 write_interval = strtol(val, (char **)NULL, 10);
             } else if (strcmp(key, "source_port") == 0 && atoi(val) > 1023 && atoi(val) < 65535) {
-                char result[5];
-                strcpy(result, val);
+                char result[6];
+                snprintf(result, sizeof(result), "%s", val);
                 sport = result;
             } else if (strcmp(key, "blocks_output") == 0 && strlen(val) == 1 && val[0] == '1') {
                 b_flag = 1;
             } else if (strcmp(key, "touch") == 0 && strlen(val) == 1 && val[0] == '1') {
                 touchdata = 1;
             } else if (strcmp(key, "device") == 0 && strlen(val) > 0) {
-                char result[12];
-                strcpy(result, val);
+                char result[16];
+                snprintf(result, sizeof(result), "%s", val);
                 device = result;
             } else if (strcmp(key, "ttcp.sock.keepalive") == 0 && atoi(val) == 1) {
                 keepalive = 1;
@@ -948,7 +948,13 @@ char *sock_ntop(int connfd)
         break;
     }
 
-    strcat(str, portstr);
+    size_t str_len = strlen(str);
+    size_t portstr_len = strlen(portstr);
+    if (str_len + portstr_len < sizeof(str)) {
+        strcat(str, portstr);
+    } else {
+        snprintf(str + str_len, sizeof(str) - str_len, "%s", portstr);
+    }
 
     char *result = malloc(strlen(str) +1);
     strcpy(result, str);
@@ -1040,7 +1046,9 @@ double read_timer(char *str, int len)
     prusage(&ru0, &ru1, &timedol, &time0, line);
 
     /* XXX: buffer overflow if len > sizeof(line) */
-    (void)strncpy(str, line, len);
+    size_t copy_len = len < sizeof(line) ? len : sizeof(line) - 1;
+    strncpy(str, line, copy_len);
+    str[copy_len] = '\0';
 
     /* Get real time */
     tvsub(&td, &timedol, &time0);
